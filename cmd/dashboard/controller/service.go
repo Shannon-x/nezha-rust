@@ -11,6 +11,7 @@ import (
 	"github.com/jinzhu/copier"
 
 	"github.com/nezhahq/nezha/model"
+	"github.com/nezhahq/nezha/pkg/tsdb"
 	"github.com/nezhahq/nezha/pkg/utils"
 	"github.com/nezhahq/nezha/service/singleton"
 	"gorm.io/gorm"
@@ -348,4 +349,187 @@ func validateServers(c *gin.Context, ss *model.Service) error {
 	}
 
 	return nil
+}
+
+// Get service history
+// @Summary Get service history by service ID
+// @Security BearerAuth
+// @Schemes
+// @Description Get service monitoring history for a specific service
+// @Tags common
+// @param id path uint true "Service ID"
+// @param period query string false "Time period: 1d, 7d, 30d (default: 1d)"
+// @Produce json
+// @Success 200 {object} model.CommonResponse[model.ServiceHistoryResponse]
+// @Router /service/{id}/history [get]
+func getServiceHistory(c *gin.Context) (*model.ServiceHistoryResponse, error) {
+	idStr := c.Param("id")
+	serviceID, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	// 检查服务是否存在
+	service, ok := singleton.ServiceSentinelShared.Get(serviceID)
+	if !ok || service == nil {
+		return nil, singleton.Localizer.ErrorT("service not found")
+	}
+
+	// 解析时间范围
+	periodStr := c.DefaultQuery("period", "1d")
+	period, err := tsdb.ParseQueryPeriod(periodStr)
+	if err != nil {
+		return nil, err
+	}
+
+	// 权限检查：未登录用户只能查看 1d 数据
+	_, isMember := c.Get(model.CtxKeyAuthorizedUser)
+	if !isMember && period != tsdb.Period1Day {
+		return nil, singleton.Localizer.ErrorT("unauthorized: only 1d data available for guests")
+	}
+
+	response := &model.ServiceHistoryResponse{
+		ServiceID:   serviceID,
+		ServiceName: service.Name,
+		Servers:     make([]model.ServerServiceStats, 0),
+	}
+
+	if !singleton.TSDBEnabled() {
+		return queryServiceHistoryFromDB(serviceID, period, response)
+	}
+
+	result, err := singleton.TSDBShared.QueryServiceHistory(serviceID, period)
+	if err != nil {
+		return nil, err
+	}
+
+	serverMap := singleton.ServerShared.GetList()
+
+	for i := range result.Servers {
+		if server, ok := serverMap[result.Servers[i].ServerID]; ok {
+			result.Servers[i].ServerName = server.Name
+		}
+	}
+	response.Servers = result.Servers
+
+	return response, nil
+}
+
+func queryServiceHistoryFromDB(serviceID uint64, period tsdb.QueryPeriod, response *model.ServiceHistoryResponse) (*model.ServiceHistoryResponse, error) {
+	since := time.Now().Add(-period.Duration())
+
+	var histories []model.ServiceHistory
+	if err := singleton.DB.Where("service_id = ? AND server_id != 0 AND created_at >= ?", serviceID, since).
+		Order("server_id, created_at").Find(&histories).Error; err != nil {
+		return nil, err
+	}
+
+	serverMap := singleton.ServerShared.GetList()
+	grouped := make(map[uint64][]model.ServiceHistory)
+	for _, h := range histories {
+		grouped[h.ServerID] = append(grouped[h.ServerID], h)
+	}
+
+	for serverID, records := range grouped {
+		stats := model.ServerServiceStats{
+			ServerID: serverID,
+		}
+		if server, ok := serverMap[serverID]; ok {
+			stats.ServerName = server.Name
+		}
+
+		var totalDelay float64
+		var totalUp, totalDown uint64
+		dps := make([]model.DataPoint, 0, len(records))
+
+		for _, r := range records {
+			totalDelay += r.AvgDelay
+			totalUp += r.Up
+			totalDown += r.Down
+			var status uint8
+			if r.Up > r.Down {
+				status = 1
+			}
+			dps = append(dps, model.DataPoint{
+				Timestamp: r.CreatedAt.UnixMilli(),
+				Delay:     r.AvgDelay,
+				Status:    status,
+			})
+		}
+
+		stats.Stats = model.ServiceHistorySummary{
+			TotalUp:   totalUp,
+			TotalDown: totalDown,
+		}
+		if len(records) > 0 {
+			stats.Stats.AvgDelay = totalDelay / float64(len(records))
+		}
+		if totalUp+totalDown > 0 {
+			stats.Stats.UpPercent = float32(totalUp) / float32(totalUp+totalDown) * 100
+		}
+		stats.Stats.DataPoints = dps
+
+		response.Servers = append(response.Servers, stats)
+	}
+
+	return response, nil
+}
+
+// Get server metrics
+// @Summary Get server metrics by server ID
+// @Security BearerAuth
+// @Schemes
+// @Description Get server metrics history for a specific server
+// @Tags common
+// @param id path uint true "Server ID"
+// @param metric query string true "Metric name (e.g. nezha_server_cpu, nezha_server_memory)"
+// @param period query string false "Time period: 1d, 7d, 30d (default: 1d)"
+// @Produce json
+// @Success 200 {object} model.CommonResponse[model.ServerMetricsResponse]
+// @Router /server/{id}/metrics [get]
+func getServerMetrics(c *gin.Context) (*model.ServerMetricsResponse, error) {
+	if !singleton.TSDBEnabled() {
+		return nil, singleton.Localizer.ErrorT("TSDB is not enabled")
+	}
+
+	idStr := c.Param("id")
+	serverID, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	server, ok := singleton.ServerShared.Get(serverID)
+	if !ok || server == nil {
+		return nil, singleton.Localizer.ErrorT("server not found")
+	}
+
+	metricStr := c.Query("metric")
+	if metricStr == "" {
+		return nil, singleton.Localizer.ErrorT("metric is required")
+	}
+	metric := tsdb.MetricType(metricStr)
+
+	periodStr := c.DefaultQuery("period", "1d")
+	period, err := tsdb.ParseQueryPeriod(periodStr)
+	if err != nil {
+		return nil, err
+	}
+
+	// 权限检查
+	_, isMember := c.Get(model.CtxKeyAuthorizedUser)
+	if !isMember && period != tsdb.Period1Day {
+		return nil, singleton.Localizer.ErrorT("unauthorized: only 1d data available for guests")
+	}
+
+	dataPoints, err := singleton.TSDBShared.QueryServerMetrics(serverID, metric, period)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.ServerMetricsResponse{
+		ServerID:   serverID,
+		ServerName: server.Name,
+		Metric:     metricStr,
+		DataPoints: dataPoints,
+	}, nil
 }

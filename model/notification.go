@@ -37,8 +37,8 @@ type Notification struct {
 	URL           string `json:"url"`
 	RequestMethod uint8  `json:"request_method"`
 	RequestType   uint8  `json:"request_type"`
-	RequestHeader string `json:"request_header" gorm:"type:longtext"`
-	RequestBody   string `json:"request_body" gorm:"type:longtext"`
+	RequestHeader string `json:"request_header" gorm:"type:text"`
+	RequestBody   string `json:"request_body" gorm:"type:text"`
 	VerifyTLS     *bool  `json:"verify_tls,omitempty"`
 }
 
@@ -128,7 +128,11 @@ func (ns *NotificationServerBundle) Send(message string) error {
 		return err
 	}
 
-	req, err := http.NewRequest(reqMethod, ns.reqURL(message), strings.NewReader(reqBody))
+	var bodyReader io.Reader
+	if reqMethod != http.MethodGet {
+		bodyReader = strings.NewReader(reqBody)
+	}
+	req, err := http.NewRequest(reqMethod, ns.reqURL(message), bodyReader)
 	if err != nil {
 		return err
 	}
@@ -144,7 +148,8 @@ func (ns *NotificationServerBundle) Send(message string) error {
 		return err
 	}
 	defer func() {
-		_ = resp.Body.Close()
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
 	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {

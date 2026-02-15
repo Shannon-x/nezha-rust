@@ -34,7 +34,7 @@ type WAFApiMock struct {
 }
 
 type WAF struct {
-	IP              []byte `gorm:"type:binary(16);primaryKey" json:"ip,omitempty"`
+	IP              []byte `gorm:"primaryKey;size:16" json:"ip,omitempty"`
 	BlockIdentifier int64  `gorm:"primaryKey" json:"block_identifier,omitempty"`
 	BlockReason     uint8  `json:"block_reason,omitempty"`
 	BlockTimestamp  uint64 `gorm:"index" json:"block_timestamp,omitempty"`

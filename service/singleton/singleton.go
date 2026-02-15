@@ -131,6 +131,10 @@ func InitDB(dbConfig model.DatabaseConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to auto-migrate database: %w", err)
 	}
+
+	// 执行数据库迁移（处理容器升级时的类型转换等）
+	model.RunMigrations(DB, dbConfig.Type)
+
 	return nil
 }
 
@@ -168,15 +172,23 @@ func RecordTransferHourlyUsage(servers ...*model.Server) {
 	log.Printf("NEZHA>> Saved traffic metrics to database. Affected %d row(s), Error: %v", len(txs), DB.Create(txs).Error)
 }
 
-// CleanServiceHistory 清理无效或过时的 监控记录 和 流量记录
-func CleanServiceHistory() {
-	// 清理已被删除的服务器的监控记录与流量记录
-	DB.Unscoped().Delete(&model.ServiceHistory{}, "created_at < ? OR service_id NOT IN (SELECT `id` FROM services)", time.Now().AddDate(0, 0, -30))
-	// 由于网络监控记录的数据较多，并且前端仅使用了 1 天的数据
-	// 考虑到 sqlite 数据量问题，仅保留一天数据，
-	// server_id = 0 的数据会用于/service页面的可用性展示
-	DB.Unscoped().Delete(&model.ServiceHistory{}, "(created_at < ? AND server_id != 0) OR service_id NOT IN (SELECT `id` FROM services)", time.Now().AddDate(0, 0, -1))
-	DB.Unscoped().Delete(&model.Transfer{}, "server_id NOT IN (SELECT `id` FROM servers)")
+// CleanMonitorHistory 清理无效或过时的 监控记录 和 流量记录
+// 兼容 MySQL/PostgreSQL/SQLite/SQL Server
+func CleanMonitorHistory() {
+	thirtyDaysAgo := time.Now().AddDate(0, 0, -30)
+	oneDayAgo := time.Now().AddDate(0, 0, -1)
+
+	if !TSDBEnabled() {
+		// 仅在未启用 TSDB 时清理 ServiceHistory 表
+		// 清理已被删除的服务的监控记录 + 超过30天的记录
+		DB.Unscoped().Where("created_at < ? OR service_id NOT IN (SELECT id FROM services)", thirtyDaysAgo).Delete(&model.ServiceHistory{})
+		// 清理超过1天的详细监控记录（server_id != 0 的逐服务器记录）
+		DB.Unscoped().Where("(created_at < ? AND server_id != 0) OR service_id NOT IN (SELECT id FROM services)", oneDayAgo).Delete(&model.ServiceHistory{})
+	}
+
+	// 清理已被删除的服务器的流量记录
+	DB.Unscoped().Where("server_id NOT IN (SELECT id FROM servers)").Delete(&model.Transfer{})
+
 	// 计算可清理流量记录的时长
 	var allServerKeep time.Time
 	specialServerKeep := make(map[uint64]time.Time)
@@ -208,12 +220,18 @@ func CleanServiceHistory() {
 		}
 	}
 	for id, couldRemove := range specialServerKeep {
-		DB.Unscoped().Delete(&model.Transfer{}, "server_id = ? AND datetime(`created_at`) < datetime(?)", id, couldRemove)
+		DB.Unscoped().Where("server_id = ? AND created_at < ?", id, couldRemove).Delete(&model.Transfer{})
 	}
 	if allServerKeep.IsZero() {
-		DB.Unscoped().Delete(&model.Transfer{}, "server_id NOT IN (?)", specialServerIDs)
+		if len(specialServerIDs) > 0 {
+			DB.Unscoped().Where("server_id NOT IN (?)", specialServerIDs).Delete(&model.Transfer{})
+		}
 	} else {
-		DB.Unscoped().Delete(&model.Transfer{}, "server_id NOT IN (?) AND datetime(`created_at`) < datetime(?)", specialServerIDs, allServerKeep)
+		if len(specialServerIDs) > 0 {
+			DB.Unscoped().Where("server_id NOT IN (?) AND created_at < ?", specialServerIDs, allServerKeep).Delete(&model.Transfer{})
+		} else {
+			DB.Unscoped().Where("created_at < ?", allServerKeep).Delete(&model.Transfer{})
+		}
 	}
 }
 
