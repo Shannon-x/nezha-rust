@@ -55,6 +55,7 @@ func listConfig(c *gin.Context) (*model.SettingResponse, error) {
 				ConfigDashboard: configDashboard,
 				Oauth2Providers: config.Oauth2Providers,
 			},
+			TSDBEnabled: singleton.TSDBEnabled(),
 		}
 	}
 
