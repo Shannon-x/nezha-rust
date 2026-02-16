@@ -192,6 +192,7 @@ func createService(c *gin.Context) (uint64, error) {
 	m.Type = mf.Type
 	m.SkipServers = mf.SkipServers
 	m.Cover = mf.Cover
+	m.DisplayIndex = mf.DisplayIndex
 	m.Notify = mf.Notify
 	m.NotificationGroupID = mf.NotificationGroupID
 	m.Duration = mf.Duration
@@ -270,6 +271,7 @@ func updateService(c *gin.Context) (any, error) {
 	m.Type = mf.Type
 	m.SkipServers = mf.SkipServers
 	m.Cover = mf.Cover
+	m.DisplayIndex = mf.DisplayIndex
 	m.Notify = mf.Notify
 	m.NotificationGroupID = mf.NotificationGroupID
 	m.Duration = mf.Duration

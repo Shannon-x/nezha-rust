@@ -172,8 +172,7 @@ func RecordTransferHourlyUsage(servers ...*model.Server) {
 	log.Printf("NEZHA>> Saved traffic metrics to database. Affected %d row(s), Error: %v", len(txs), DB.Create(txs).Error)
 }
 
-// CleanMonitorHistory 清理无效或过时的 监控记录 和 流量记录
-// 兼容 MySQL/PostgreSQL/SQLite/SQL Server
+// CleanMonitorHistory 清理流量记录（TSDB 有自己的保留策略）
 func CleanMonitorHistory() {
 	thirtyDaysAgo := time.Now().AddDate(0, 0, -30)
 	oneDayAgo := time.Now().AddDate(0, 0, -1)
@@ -187,7 +186,7 @@ func CleanMonitorHistory() {
 	}
 
 	// 清理已被删除的服务器的流量记录
-	DB.Unscoped().Where("server_id NOT IN (SELECT id FROM servers)").Delete(&model.Transfer{})
+	DB.Unscoped().Delete(&model.Transfer{}, "server_id NOT IN (SELECT `id` FROM servers)")
 
 	// 计算可清理流量记录的时长
 	var allServerKeep time.Time
@@ -220,18 +219,12 @@ func CleanMonitorHistory() {
 		}
 	}
 	for id, couldRemove := range specialServerKeep {
-		DB.Unscoped().Where("server_id = ? AND created_at < ?", id, couldRemove).Delete(&model.Transfer{})
+		DB.Unscoped().Delete(&model.Transfer{}, "server_id = ? AND datetime(`created_at`) < datetime(?)", id, couldRemove)
 	}
 	if allServerKeep.IsZero() {
-		if len(specialServerIDs) > 0 {
-			DB.Unscoped().Where("server_id NOT IN (?)", specialServerIDs).Delete(&model.Transfer{})
-		}
+		DB.Unscoped().Delete(&model.Transfer{}, "server_id NOT IN (?)", specialServerIDs)
 	} else {
-		if len(specialServerIDs) > 0 {
-			DB.Unscoped().Where("server_id NOT IN (?) AND created_at < ?", specialServerIDs, allServerKeep).Delete(&model.Transfer{})
-		} else {
-			DB.Unscoped().Where("created_at < ?", allServerKeep).Delete(&model.Transfer{})
-		}
+		DB.Unscoped().Delete(&model.Transfer{}, "server_id NOT IN (?) AND datetime(`created_at`) < datetime(?)", specialServerIDs, allServerKeep)
 	}
 }
 

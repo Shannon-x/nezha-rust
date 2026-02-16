@@ -82,35 +82,38 @@ func initVMStore(config *tsdb.Config) error {
 
 // TSDBEnabled 检查 TSDB 是否启用
 func TSDBEnabled() bool {
-	return TSDBShared != nil
+	if TSDBShared == nil {
+		return false
+	}
+	// 检查 VM 模式的 TSDB 是否已关闭
+	if vmDB, ok := TSDBShared.(*tsdb.TSDB); ok {
+		return !vmDB.IsClosed()
+	}
+	return true
 }
 
 // CloseTSDB 关闭 TSDB
 func CloseTSDB() {
 	if TSDBShared != nil {
-		if err := TSDBShared.Close(); err != nil {
-			log.Printf("NEZHA>> Warning: failed to close TSDB: %v", err)
-		}
+		TSDBShared.Close()
 	}
 }
 
-// PerformMaintenance 执行系统存储维护
-// 对 SQLite 执行 VACUUM，对 TSDB 执行清理/刷盘
+// PerformMaintenance 执行系统维护（SQLite VACUUM 和 TSDB 维护）
 func PerformMaintenance() {
 	log.Println("NEZHA>> Starting system maintenance...")
 
-	// 仅对 SQLite 执行 VACUUM
-	if Conf.Database.Type == model.DBTypeSQLite || Conf.Database.Type == "" {
-		if DB != nil {
-			if err := DB.Exec("VACUUM").Error; err != nil {
-				log.Printf("NEZHA>> Warning: VACUUM failed: %v", err)
-			} else {
-				log.Println("NEZHA>> SQLite VACUUM completed")
-			}
+	// 1. SQLite 维护
+	if DB != nil {
+		log.Println("NEZHA>> SQLite: Starting VACUUM...")
+		if err := DB.Exec("VACUUM").Error; err != nil {
+			log.Printf("NEZHA>> SQLite: VACUUM failed: %v", err)
+		} else {
+			log.Println("NEZHA>> SQLite: VACUUM completed")
 		}
 	}
 
-	// TSDB 维护（VM模式刷盘，SQL模式清理过期数据）
+	// 2. TSDB 维护
 	if TSDBEnabled() {
 		TSDBShared.Maintenance()
 	}

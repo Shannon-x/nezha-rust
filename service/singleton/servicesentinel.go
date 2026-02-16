@@ -163,9 +163,12 @@ func (ss *ServiceSentinel) Dispatch(r ReportData) {
 	ss.serviceReportChannel <- r
 }
 
-// sortServices 按 ID 升序排列服务列表
+// sortServices 按 DisplayIndex 降序、ID 升序排列服务列表
 func sortServices(services []*model.Service) {
 	slices.SortFunc(services, func(a, b *model.Service) int {
+		if a.DisplayIndex != b.DisplayIndex {
+			return cmp.Compare(b.DisplayIndex, a.DisplayIndex)
+		}
 		return cmp.Compare(a.ID, b.ID)
 	})
 }
@@ -482,6 +485,7 @@ func (ss *ServiceSentinel) worker() {
 
 		mh := r.Data
 		if mh.Type == model.TaskTypeTCPPing || mh.Type == model.TaskTypeICMPPing {
+			// TCP/ICMP Ping 使用平均值计算后再写入
 			serviceTcpMap, ok := ss.serviceResponsePing[mh.GetId()]
 			if !ok {
 				serviceTcpMap = make(map[uint64]*pingStore)
@@ -493,6 +497,9 @@ func (ss *ServiceSentinel) worker() {
 			}
 			ts.count++
 			ts.ping = (ts.ping*float64(ts.count-1) + float64(mh.Delay)) / float64(ts.count)
+			if mh.Successful {
+				ts.successCount++
+			}
 			if ts.count == Conf.AvgPingCount {
 				if TSDBEnabled() {
 					if err := TSDBShared.WriteServiceMetrics(&tsdb.ServiceMetrics{
@@ -500,9 +507,9 @@ func (ss *ServiceSentinel) worker() {
 						ServerID:   r.Reporter,
 						Timestamp:  time.Now(),
 						Delay:      ts.ping,
-						Successful: mh.Successful,
+						Successful: ts.successCount*2 >= ts.count,
 					}); err != nil {
-						log.Printf("NEZHA>> Failed to write service metrics to TSDB: %v", err)
+						log.Printf("NEZHA>> Failed to save service monitor metrics to TSDB: %v", err)
 					}
 				} else {
 					if err := DB.Create(&model.ServiceHistory{
@@ -515,9 +522,22 @@ func (ss *ServiceSentinel) worker() {
 					}
 				}
 				ts.count = 0
-				ts.ping = float64(mh.Delay)
+				ts.ping = 0
+				ts.successCount = 0
 			}
 			serviceTcpMap[r.Reporter] = ts
+		} else {
+			if TSDBEnabled() {
+				if err := TSDBShared.WriteServiceMetrics(&tsdb.ServiceMetrics{
+					ServiceID:  mh.GetId(),
+					ServerID:   r.Reporter,
+					Timestamp:  time.Now(),
+					Delay:      float64(mh.Delay),
+					Successful: mh.Successful,
+				}); err != nil {
+					log.Printf("NEZHA>> Failed to save service monitor metrics to TSDB: %v", err)
+				}
+			}
 		}
 
 		ss.serviceResponseDataStoreLock.Lock()
@@ -570,21 +590,10 @@ func (ss *ServiceSentinel) worker() {
 			stateCode = GetStatusCode(upPercent)
 		}
 
-		// 数据持久化
 		if len(ss.serviceCurrentStatusData[mh.GetId()].result) == _CurrentStatusSize {
 			ss.serviceCurrentStatusData[mh.GetId()].t = currentTime
-			rd := ss.serviceResponseDataStore[mh.GetId()]
-			if TSDBEnabled() {
-				if err := TSDBShared.WriteServiceMetrics(&tsdb.ServiceMetrics{
-					ServiceID:  mh.GetId(),
-					ServerID:   0,
-					Timestamp:  currentTime,
-					Delay:      rd.Delay,
-					Successful: rd.Up > rd.Down,
-				}); err != nil {
-					log.Printf("NEZHA>> Failed to write service metrics to TSDB: %v", err)
-				}
-			} else {
+			if !TSDBEnabled() {
+				rd := ss.serviceResponseDataStore[mh.GetId()]
 				if err := DB.Create(&model.ServiceHistory{
 					ServiceID: mh.GetId(),
 					AvgDelay:  rd.Delay,
@@ -595,7 +604,6 @@ func (ss *ServiceSentinel) worker() {
 					log.Printf("NEZHA>> Failed to save service monitor metrics: %v", err)
 				}
 			}
-
 			ss.serviceCurrentStatusData[mh.GetId()].result = ss.serviceCurrentStatusData[mh.GetId()].result[:0]
 		}
 

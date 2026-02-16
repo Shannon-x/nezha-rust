@@ -39,6 +39,7 @@ func listConfig(c *gin.Context) (*model.SettingResponse, error) {
 		},
 		Version:           singleton.Version,
 		FrontendTemplates: singleton.FrontendTemplates,
+		TSDBEnabled:       singleton.TSDBEnabled(),
 	}
 
 	if !authorized || !isAdmin {
@@ -111,5 +112,19 @@ func updateConfig(c *gin.Context) (any, error) {
 	}
 
 	singleton.OnUpdateLang(singleton.Conf.Language)
+	return nil, nil
+}
+
+// Perform maintenance
+// @Summary Perform system maintenance
+// @Security BearerAuth
+// @Schemes
+// @Description Perform system maintenance (SQLite VACUUM and TSDB maintenance)
+// @Tags admin required
+// @Produce json
+// @Success 200 {object} model.CommonResponse[any]
+// @Router /maintenance [post]
+func performMaintenance(c *gin.Context) (any, error) {
+	go singleton.PerformMaintenance()
 	return nil, nil
 }

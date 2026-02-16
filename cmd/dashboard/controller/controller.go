@@ -154,6 +154,7 @@ func routers(r *gin.Engine, frontendDist fs.FS) {
 	auth.POST("/online-user/batch-block", adminHandler(batchBlockOnlineUser))
 
 	auth.PATCH("/setting", adminHandler(updateConfig))
+	auth.POST("/maintenance", adminHandler(performMaintenance))
 
 	r.NoRoute(fallbackToFrontend(frontendDist))
 }

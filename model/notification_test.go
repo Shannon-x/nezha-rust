@@ -191,7 +191,7 @@ func TestNotification(t *testing.T) {
 			expectURL:         "https://example.com/?m=" + msg,
 			expectMethod:      http.MethodPost,
 			expectContentType: reqTypeJSON,
-			expectBody:        `{"Server":"ServerName","ServerIP":"1.1.1.1","ServerSWAP":8888}`,
+			expectBody:        `{"Server":"ServerName","ServerIP":"1.1.1.1","ServerSWAP":0.000000}`,
 			expectHeader:      map[string]string{"asd": "dsa11"},
 		},
 		{
@@ -202,7 +202,7 @@ func TestNotification(t *testing.T) {
 			expectURL:         "https://example.com/?m=" + msg,
 			expectMethod:      http.MethodPost,
 			expectContentType: reqTypeForm,
-			expectBody:        "%23NEZHA%23=" + msg + "&Server=ServerName&ServerIP=1.1.1.1&ServerSWAP=8888",
+			expectBody:        "%23NEZHA%23=" + msg + "&Server=ServerName&ServerIP=1.1.1.1&ServerSWAP=0.000000",
 		},
 	}
 

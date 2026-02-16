@@ -33,13 +33,14 @@ type NotificationServerBundle struct {
 
 type Notification struct {
 	Common
-	Name          string `json:"name"`
-	URL           string `json:"url"`
-	RequestMethod uint8  `json:"request_method"`
-	RequestType   uint8  `json:"request_type"`
-	RequestHeader string `json:"request_header" gorm:"type:text"`
-	RequestBody   string `json:"request_body" gorm:"type:text"`
-	VerifyTLS     *bool  `json:"verify_tls,omitempty"`
+	Name              string `json:"name"`
+	URL               string `json:"url"`
+	RequestMethod     uint8  `json:"request_method"`
+	RequestType       uint8  `json:"request_type"`
+	RequestHeader     string `json:"request_header" gorm:"type:longtext"`
+	RequestBody       string `json:"request_body" gorm:"type:longtext"`
+	VerifyTLS         *bool  `json:"verify_tls,omitempty"`
+	FormatMetricUnits *bool  `json:"format_metric_units,omitempty"`
 }
 
 func (ns *NotificationServerBundle) reqURL(message string) string {
@@ -128,11 +129,7 @@ func (ns *NotificationServerBundle) Send(message string) error {
 		return err
 	}
 
-	var bodyReader io.Reader
-	if reqMethod != http.MethodGet {
-		bodyReader = strings.NewReader(reqBody)
-	}
-	req, err := http.NewRequest(reqMethod, ns.reqURL(message), bodyReader)
+	req, err := http.NewRequest(reqMethod, ns.reqURL(message), strings.NewReader(reqBody))
 	if err != nil {
 		return err
 	}
@@ -148,8 +145,7 @@ func (ns *NotificationServerBundle) Send(message string) error {
 		return err
 	}
 	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
@@ -177,10 +173,19 @@ func (ns *NotificationServerBundle) replaceParamsInString(str string, message st
 		replacements = append(replacements,
 			"#SERVER.NAME#", mod(ns.Server.Name),
 			"#SERVER.ID#", mod(fmt.Sprintf("%d", ns.Server.ID)),
-			"#SERVER.CPU#", mod(fmt.Sprintf("%f", ns.Server.State.CPU)),
-			"#SERVER.MEM#", mod(fmt.Sprintf("%d", ns.Server.State.MemUsed)),
-			"#SERVER.SWAP#", mod(fmt.Sprintf("%d", ns.Server.State.SwapUsed)),
-			"#SERVER.DISK#", mod(fmt.Sprintf("%d", ns.Server.State.DiskUsed)),
+
+			// Converted metrics
+			"#SERVER.CPU#", mod(ns.formatUsage(false, ns.Server.State.CPU)),
+			"#SERVER.MEM#", mod(ns.formatUsage(true, safeDiv(float64(ns.Server.State.MemUsed), float64(ns.Server.Host.MemTotal)))),
+			"#SERVER.SWAP#", mod(ns.formatUsage(true, safeDiv(float64(ns.Server.State.SwapUsed), float64(ns.Server.Host.SwapTotal)))),
+			"#SERVER.DISK#", mod(ns.formatUsage(true, safeDiv(float64(ns.Server.State.DiskUsed), float64(ns.Server.Host.DiskTotal)))),
+			"#SERVER.SPEEDIN#", mod(fmt.Sprintf("%s/s", ns.formatSize(ns.Server.State.NetInSpeed))),
+			"#SERVER.SPEEDOUT#", mod(fmt.Sprintf("%s/s", ns.formatSize(ns.Server.State.NetOutSpeed))),
+			"#SERVER.TRANSFERIN#", mod(ns.formatSize(ns.Server.State.NetInTransfer)),
+			"#SERVER.TRANSFEROUT#", mod(ns.formatSize(ns.Server.State.NetOutTransfer)),
+
+			// Raw metrics
+			"#SERVER.CPUUSED#", mod(fmt.Sprintf("%f", ns.Server.State.CPU)),
 			"#SERVER.MEMUSED#", mod(fmt.Sprintf("%d", ns.Server.State.MemUsed)),
 			"#SERVER.SWAPUSED#", mod(fmt.Sprintf("%d", ns.Server.State.SwapUsed)),
 			"#SERVER.DISKUSED#", mod(fmt.Sprintf("%d", ns.Server.State.DiskUsed)),
@@ -189,8 +194,6 @@ func (ns *NotificationServerBundle) replaceParamsInString(str string, message st
 			"#SERVER.DISKTOTAL#", mod(fmt.Sprintf("%d", ns.Server.Host.DiskTotal)),
 			"#SERVER.NETINSPEED#", mod(fmt.Sprintf("%d", ns.Server.State.NetInSpeed)),
 			"#SERVER.NETOUTSPEED#", mod(fmt.Sprintf("%d", ns.Server.State.NetOutSpeed)),
-			"#SERVER.TRANSFERIN#", mod(fmt.Sprintf("%d", ns.Server.State.NetInTransfer)),
-			"#SERVER.TRANSFEROUT#", mod(fmt.Sprintf("%d", ns.Server.State.NetOutTransfer)),
 			"#SERVER.NETINTRANSFER#", mod(fmt.Sprintf("%d", ns.Server.State.NetInTransfer)),
 			"#SERVER.NETOUTTRANSFER#", mod(fmt.Sprintf("%d", ns.Server.State.NetOutTransfer)),
 			"#SERVER.LOAD1#", mod(fmt.Sprintf("%f", ns.Server.State.Load1)),
@@ -223,4 +226,29 @@ func (ns *NotificationServerBundle) replaceParamsInString(str string, message st
 
 	replacer := strings.NewReplacer(replacements...)
 	return replacer.Replace(str)
+}
+
+func (ns *NotificationServerBundle) formatUsage(toPercentage bool, usage float64) string {
+	if ns.Notification.FormatMetricUnits != nil && *ns.Notification.FormatMetricUnits {
+		if toPercentage {
+			usage = usage * 100
+		}
+
+		return fmt.Sprintf("%.2f %%", usage)
+	}
+	return fmt.Sprintf("%f", usage)
+}
+
+func (ns *NotificationServerBundle) formatSize(size uint64) string {
+	if ns.Notification.FormatMetricUnits != nil && *ns.Notification.FormatMetricUnits {
+		return utils.Bytes(size)
+	}
+	return fmt.Sprintf("%d", size)
+}
+
+func safeDiv(a, b float64) float64 {
+	if b == 0 {
+		return 0
+	}
+	return a / b
 }
