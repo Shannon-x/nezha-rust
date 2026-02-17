@@ -59,7 +59,7 @@ type Service struct {
 	Cover               uint8  `json:"cover"`
 
 	EnableTriggerTask      bool   `gorm:"default: false" json:"enable_trigger_task,omitempty"`
-	EnableShowInService    bool   `gorm:"default: false" json:"enable_show_in_service,omitempty"`
+	EnableShowInService    bool   `gorm:"default: true" json:"enable_show_in_service"`
 	FailTriggerTasksRaw    string `gorm:"default:'[]'" json:"-"`
 	RecoverTriggerTasksRaw string `gorm:"default:'[]'" json:"-"`
 
