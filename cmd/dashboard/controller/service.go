@@ -97,9 +97,67 @@ func listServiceHistory(c *gin.Context) ([]*model.ServiceInfos, error) {
 		return nil, singleton.Localizer.ErrorT("unauthorized")
 	}
 
+	// 当 TSDB 启用时，从 TSDB 查询数据（tsdb_service_metrics 表）
+	if singleton.TSDBEnabled() {
+		return listServiceHistoryFromTSDB(id, m)
+	}
+
+	// 回退到旧的 service_histories 表查询
+	return listServiceHistoryFromDB(id, m)
+}
+
+func listServiceHistoryFromTSDB(serverID uint64, m map[uint64]*model.Server) ([]*model.ServiceInfos, error) {
+	results, err := singleton.TSDBShared.QueryServiceHistoryByServerID(serverID, tsdb.Period1Day)
+	if err != nil {
+		return nil, err
+	}
+
+	var sortedServiceIDs []uint64
+	resultMap := make(map[uint64]*model.ServiceInfos)
+
+	for serviceID, histResult := range results {
+		service, _ := singleton.ServiceSentinelShared.Get(serviceID)
+		serviceName := ""
+		if service != nil {
+			serviceName = service.Name
+		}
+		serverName := ""
+		if srv, ok := m[serverID]; ok {
+			serverName = srv.Name
+		}
+
+		infos := &model.ServiceInfos{
+			ServiceID:   serviceID,
+			ServerID:    serverID,
+			ServiceName: serviceName,
+			ServerName:  serverName,
+		}
+
+		// 将 TSDB 的 DataPoints 转换为旧 API 的 CreatedAt + AvgDelay 格式
+		if len(histResult.Servers) > 0 {
+			stats := histResult.Servers[0].Stats
+			for _, dp := range stats.DataPoints {
+				infos.CreatedAt = append(infos.CreatedAt, dp.Timestamp)
+				infos.AvgDelay = append(infos.AvgDelay, dp.Delay)
+			}
+		}
+
+		resultMap[serviceID] = infos
+		sortedServiceIDs = append(sortedServiceIDs, serviceID)
+	}
+
+	ret := make([]*model.ServiceInfos, 0, len(sortedServiceIDs))
+	for _, id := range sortedServiceIDs {
+		ret = append(ret, resultMap[id])
+	}
+
+	return ret, nil
+}
+
+func listServiceHistoryFromDB(serverID uint64, m map[uint64]*model.Server) ([]*model.ServiceInfos, error) {
 	var serviceHistories []*model.ServiceHistory
 	if err := singleton.DB.Model(&model.ServiceHistory{}).Select("service_id, created_at, server_id, avg_delay").
-		Where("server_id = ?", id).Where("created_at >= ?", time.Now().Add(-24*time.Hour)).Order("service_id, created_at").
+		Where("server_id = ?", serverID).Where("created_at >= ?", time.Now().Add(-24*time.Hour)).Order("service_id, created_at").
 		Scan(&serviceHistories).Error; err != nil {
 		return nil, err
 	}
