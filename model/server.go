@@ -37,6 +37,8 @@ type Server struct {
 
 	PrevTransferInSnapshot  uint64 `gorm:"-" json:"-"` // 上次数据点时的入站使用量
 	PrevTransferOutSnapshot uint64 `gorm:"-" json:"-"` // 上次数据点时的出站使用量
+
+	LastTSDBWrite time.Time `gorm:"-" json:"-"` // last time ServerMetrics was written to TSDB
 }
 
 func InitServer(s *Server) {
@@ -55,6 +57,7 @@ func (s *Server) CopyFromRunningServer(old *Server) {
 	s.ConfigCache = old.ConfigCache
 	s.PrevTransferInSnapshot = old.PrevTransferInSnapshot
 	s.PrevTransferOutSnapshot = old.PrevTransferOutSnapshot
+	s.LastTSDBWrite = old.LastTSDBWrite
 }
 
 func (s *Server) AfterFind(tx *gorm.DB) error {

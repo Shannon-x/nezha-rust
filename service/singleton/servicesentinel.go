@@ -121,8 +121,8 @@ func NewServiceSentinel(serviceSentinelDispatchBus chan<- *model.Service) (*Serv
 		return nil, err
 	}
 
-	// 每周日凌晨 4:00 执行系统存储维护
-	_, err = CronShared.AddFunc("0 0 4 * * 0", PerformMaintenance)
+	// 每天凌晨 4:20 执行系统存储维护 (原来是每周日，改为每日以防积累过多数据)
+	_, err = CronShared.AddFunc("0 20 4 * * *", PerformMaintenance)
 	if err != nil {
 		log.Printf("NEZHA>> Warning: failed to schedule maintenance task: %v", err)
 	}

@@ -115,8 +115,9 @@ func (s *NezhaHandler) ReportSystemState(stream pb.NezhaService_ReportSystemStat
 		server.LastActive = time.Now()
 		server.State = &innerState
 
-		// TSDB 写入服务器指标
-		if singleton.TSDBEnabled() {
+		// TSDB 写入服务器指标 (Throttle: 1 entry per minute per server)
+		if singleton.TSDBEnabled() && time.Since(server.LastTSDBWrite) >= time.Minute {
+			server.LastTSDBWrite = time.Now()
 			maxTemp := 0.0
 			for _, t := range innerState.Temperatures {
 				if t.Temperature > maxTemp {
