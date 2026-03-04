@@ -310,34 +310,39 @@ func (s *SQLStore) QueryServiceDailyStats(serviceID uint64, today time.Time, day
 	start := today.AddDate(0, 0, -(days - 1))
 	stats := make([]DailyServiceStats, days)
 
-	rows, err := s.db.Model(&TSDBServiceMetric{}).
-		Select("delay, status, created_at").
+	type aggResult struct {
+		Date     string  `gorm:"column:date"`
+		Up       uint64  `gorm:"column:up"`
+		Down     uint64  `gorm:"column:down"`
+		AvgDelay float64 `gorm:"column:avg_delay"`
+	}
+
+	var results []aggResult
+	if err := s.db.Model(&TSDBServiceMetric{}).
+		Select("DATE(created_at) as date, SUM(CASE WHEN status >= 1 THEN 1 ELSE 0 END) as up, SUM(CASE WHEN status < 1 THEN 1 ELSE 0 END) as down, AVG(delay) as avg_delay").
 		Where("service_id = ? AND created_at >= ? AND created_at < ?", serviceID, start, today).
-		Rows()
-	if err != nil {
+		Group("DATE(created_at)").
+		Find(&results).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	delayCount := make([]int, days)
-	for rows.Next() {
-		var delay float64
-		var status uint8
-		var createdAt time.Time
-		if err := rows.Scan(&delay, &status, &createdAt); err != nil {
+	for _, r := range results {
+		if len(r.Date) < 10 {
 			continue
 		}
-		dayIndex := (days - 1) - int(today.Sub(createdAt).Hours())/24
+		t, err := time.Parse("2006-01-02", r.Date[0:10])
+		if err != nil {
+			continue
+		}
+
+		// Map the aggregated date back to the stats array using precise index calculation
+		dayIndex := (days - 1) - int(today.Sub(t).Hours())/24
 		if dayIndex < 0 || dayIndex >= days {
 			continue
 		}
-		if status >= 1 {
-			stats[dayIndex].Up++
-		} else {
-			stats[dayIndex].Down++
-		}
-		stats[dayIndex].Delay = (stats[dayIndex].Delay*float64(delayCount[dayIndex]) + delay) / float64(delayCount[dayIndex]+1)
-		delayCount[dayIndex]++
+		stats[dayIndex].Up = r.Up
+		stats[dayIndex].Down = r.Down
+		stats[dayIndex].Delay = r.AvgDelay
 	}
 
 	return stats, nil
