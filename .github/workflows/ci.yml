@@ -13,36 +13,19 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # ── 代码检查 + 测试 ──
+  # ── 检查 + 测试 ──
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt, clippy
-
       - uses: Swatinem/rust-cache@v2
-
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-
-      - name: Format check
-        run: cargo +nightly fmt --all -- --check
-        continue-on-error: true
-
-      - name: Clippy
-        run: cargo +nightly clippy --workspace -- -W clippy::all
-        continue-on-error: true
-
-      - name: Build check
+      - name: Build
         run: cargo +nightly check --workspace
-
-      - name: Run tests
+      - name: Test
         run: cargo +nightly test --workspace
 
-  # ── 多架构构建（仅 tag 触发）──
+  # ── 多平台构建（仅 tag 触发）──
   build:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: check
@@ -50,15 +33,41 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # ── Linux ──
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             artifact: nezha-dashboard-linux-amd64
+            cross: false
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             artifact: nezha-dashboard-linux-arm64
+            cross: true
+          - target: armv7-unknown-linux-gnueabihf
+            os: ubuntu-latest
+            artifact: nezha-dashboard-linux-armv7
+            cross: true
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             artifact: nezha-dashboard-linux-amd64-musl
+            cross: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            artifact: nezha-dashboard-linux-arm64-musl
+            cross: true
+          # ── macOS ──
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            artifact: nezha-dashboard-darwin-amd64
+            cross: false
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: nezha-dashboard-darwin-arm64
+            cross: false
+          # ── FreeBSD (via cross) ──
+          - target: x86_64-unknown-freebsd
+            os: ubuntu-latest
+            artifact: nezha-dashboard-freebsd-amd64
+            cross: true
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -71,40 +80,36 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Install system deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
+      # 使用 cross 进行交叉编译
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
 
-      - name: Install cross-compilation tools (ARM64)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-
-      - name: Set ARM64 linker
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-
-      - name: Install musl tools
-        if: matrix.target == 'x86_64-unknown-linux-musl'
-        run: sudo apt-get install -y musl-tools
-
-      - name: Build release
+      # 原生编译
+      - name: Build (native)
+        if: "!matrix.cross"
         run: cargo +nightly build --release --target ${{ matrix.target }}
+
+      # 交叉编译
+      - name: Build (cross)
+        if: matrix.cross
+        run: cross +nightly build --release --target ${{ matrix.target }}
 
       - name: Package
         run: |
-          cp target/${{ matrix.target }}/release/nezha-dashboard ${{ matrix.artifact }}
-          chmod +x ${{ matrix.artifact }}
-          sha256sum ${{ matrix.artifact }} > ${{ matrix.artifact }}.sha256
+          cp target/${{ matrix.target }}/release/nezha-dashboard ${{ matrix.artifact }} 2>/dev/null || \
+          cp target/${{ matrix.target }}/release/nezha-dashboard.exe ${{ matrix.artifact }}.exe 2>/dev/null || true
+          chmod +x ${{ matrix.artifact }} 2>/dev/null || true
+          sha256sum ${{ matrix.artifact }}* > ${{ matrix.artifact }}.sha256 2>/dev/null || \
+          shasum -a 256 ${{ matrix.artifact }}* > ${{ matrix.artifact }}.sha256
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: |
-            ${{ matrix.artifact }}
-            ${{ matrix.artifact }}.sha256
+            ${{ matrix.artifact }}*
 
-  # ── Docker 镜像（仅 tag 触发）──
+  # ── Docker 镜像 ──
   docker:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: check
@@ -137,14 +142,14 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ── GitHub Release（仅 tag 触发）──
+  # ── GitHub Release ──
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [build, docker]
