@@ -1,5 +1,5 @@
 # ─── Multi-stage Rust build ───
-FROM rust:1.83-bookworm AS builder
+FROM rustlang/rust:nightly-bookworm AS builder
 
 RUN apt-get update && apt-get install -y protobuf-compiler cmake pkg-config && rm -rf /var/lib/apt/lists/*
 
