@@ -1,0 +1,23 @@
+[package]
+name = "nezha-rpc"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+nezha-proto.workspace = true
+nezha-core.workspace = true
+nezha-service.workspace = true
+nezha-utils.workspace = true
+nezha-tsdb.workspace = true
+
+tonic.workspace = true
+prost.workspace = true
+tokio.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+dashmap.workspace = true
+parking_lot.workspace = true
+futures.workspace = true
+tokio-stream = { workspace = true }

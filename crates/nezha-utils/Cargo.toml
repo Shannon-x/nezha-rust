@@ -1,0 +1,21 @@
+[package]
+name = "nezha-utils"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+maxminddb.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+rand.workspace = true
+base64.workspace = true
+sha2.workspace = true
+hex.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+regex.workspace = true
+ipnetwork.workspace = true
+reqwest.workspace = true
+tokio.workspace = true

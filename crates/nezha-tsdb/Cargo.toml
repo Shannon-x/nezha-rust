@@ -1,0 +1,17 @@
+[package]
+name = "nezha-tsdb"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+nezha-core.workspace = true
+
+sqlx.workspace = true
+tokio.workspace = true
+chrono.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+async-trait.workspace = true
+parking_lot.workspace = true

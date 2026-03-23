@@ -1,41 +1,39 @@
-FROM golang:1.25-bookworm AS builder
+# ─── Multi-stage Rust build ───
+FROM rust:1.83-bookworm AS builder
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y git gcc libc6-dev ca-certificates
+RUN apt-get update && apt-get install -y protobuf-compiler cmake pkg-config && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-
-# Copy go mod files
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy source code
 COPY . .
 
-# Generate swagger docs
-RUN go install github.com/swaggo/swag/cmd/swag@latest
+# 利用 Docker layer 缓存依赖
+RUN --mount=type=cache,target=/app/target \
+    --mount=type=cache,target=/usr/local/cargo/registry \
+    cargo build --release && \
+    cp /app/target/release/nezha-dashboard /usr/local/bin/nezha-dashboard
 
-
-# Generate swagger (after frontend assets are in place, though swag doesn't strictly depend on them but main.go might embed them)
-RUN swag init -g cmd/dashboard/main.go -o cmd/dashboard/docs --parseDependency || true
-
-# Build the application
-RUN CGO_ENABLED=1 go build -v -ldflags="-s -w" -o dashboard ./cmd/dashboard
-
-# Final stage
+# ─── 最小运行时镜像 ───
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates tzdata curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    groupadd -r nezha && useradd -r -g nezha nezha && \
+    mkdir -p /data && chown nezha:nezha /data
 
-WORKDIR /dashboard
+COPY --from=builder /usr/local/bin/nezha-dashboard /usr/local/bin/nezha-dashboard
 
-COPY --from=builder /app/dashboard ./app
-COPY script/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+USER nezha
+WORKDIR /data
 
-VOLUME ["/dashboard/data"]
-EXPOSE 8008
-ARG TZ=Asia/Shanghai
-ENV TZ=$TZ
+ENV TZ=Asia/Shanghai \
+    NZ_LISTEN_PORT=8008 \
+    NZ_DATABASE_PATH=/data/sqlite.db
 
-ENTRYPOINT ["/entrypoint.sh"]
+EXPOSE 8008 5555
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -sf http://localhost:8008/api/v1/setting || exit 1
+
+ENTRYPOINT ["nezha-dashboard"]
+CMD ["-c", "/data/config.yaml"]

@@ -1,0 +1,12 @@
+pub mod auth;
+pub mod server;
+pub mod server_group;
+pub mod service;
+pub mod notification;
+pub mod alert_rule;
+pub mod cron;
+pub mod ddns;
+pub mod nat;
+pub mod user;
+pub mod setting;
+pub mod oauth2;

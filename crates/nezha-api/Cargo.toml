@@ -1,0 +1,33 @@
+[package]
+name = "nezha-api"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+nezha-core.workspace = true
+nezha-proto.workspace = true
+nezha-service.workspace = true
+nezha-utils.workspace = true
+nezha-tsdb.workspace = true
+
+axum.workspace = true
+axum-extra.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+jsonwebtoken.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+dashmap.workspace = true
+futures.workspace = true
+uuid.workspace = true
+rust-embed.workspace = true
+bcrypt.workspace = true
+sqlx.workspace = true
+reqwest.workspace = true
+urlencoding.workspace = true

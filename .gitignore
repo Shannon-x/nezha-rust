@@ -1,26 +1,31 @@
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test binary, build with `go test -c`
-*.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
+/target/
+**/*.rs.bk
+*.swp
+*.swo
 *~
-*.out
-*.pprof
-.idea
-/dist
+
+# Data files
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
 .DS_Store
-/cmd/dashboard/data
-/cmd/dashboard/main
-/cmd/dashboard/*-dist
-!/cmd/dashboard/admin-dist/.gitkeep
-!/cmd/dashboard/user-dist/.gitkeep
-/config.yml
-/resource/template/theme-custom
-/resource/static/custom
-/cmd/dashboard/docs
+Thumbs.db
+
+# Build artifacts
+*.o
+*.d
+
+# Env files
+.env
+.env.local
+
+# Frontend build
+resource/

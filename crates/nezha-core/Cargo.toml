@@ -1,0 +1,20 @@
+[package]
+name = "nezha-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+nezha-proto.workspace = true
+nezha-utils.workspace = true
+
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+sqlx.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+bcrypt.workspace = true
+tokio.workspace = true
