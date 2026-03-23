@@ -109,31 +109,53 @@ download_binary() {
     local version="$1"
     local artifact
     artifact=$(get_artifact_name)
-    local url="${GITHUB_DL}/${version}/${artifact}"
+    local url="${GITHUB_DL}/${version}/${artifact}.tar.gz"
 
     info "平台:  $(detect_os)/$(detect_arch) ($(detect_libc))"
-    info "文件:  ${artifact}"
+    info "文件:  ${artifact}.tar.gz"
     info "版本:  ${version}"
     info "URL:   ${url}"
 
-    local tmp_file
+    local tmp_file tmp_dir
     tmp_file=$(mktemp)
+    tmp_dir=$(mktemp -d)
 
     if ! curl -fSL --progress-bar -o "$tmp_file" "$url"; then
-        rm -f "$tmp_file"
-        error "下载失败！"
-        error "可能原因："
-        error "  1. 版本 ${version} 还未发布此平台的二进制"
-        error "  2. 网络连接问题"
-        error "  3. 文件名: ${artifact}"
-        error ""
-        error "可用平台列表: https://github.com/${REPO}/releases/latest"
-        exit 1
+        rm -f "$tmp_file" && rm -rf "$tmp_dir"
+        # 尝试不带 .tar.gz 的裸二进制（老版本兼容）
+        url="${GITHUB_DL}/${version}/${artifact}"
+        info "尝试裸二进制: ${url}"
+        if ! curl -fSL --progress-bar -o "$tmp_file" "$url"; then
+            rm -f "$tmp_file" && rm -rf "$tmp_dir"
+            error "下载失败！"
+            error "可用下载: https://github.com/${REPO}/releases/latest"
+            exit 1
+        fi
+        chmod +x "$tmp_file"
+        mv -f "$tmp_file" "$BIN_PATH"
+        info "已安装到 ${BIN_PATH}（无前端资源）"
+        return
     fi
 
-    chmod +x "$tmp_file"
-    mv -f "$tmp_file" "$BIN_PATH"
-    info "已安装到 ${BIN_PATH}"
+    # 解压 tar.gz
+    tar xzf "$tmp_file" -C "$tmp_dir"
+    rm -f "$tmp_file"
+
+    # 安装二进制
+    if [[ -f "$tmp_dir/nezha-dashboard" ]]; then
+        chmod +x "$tmp_dir/nezha-dashboard"
+        mv -f "$tmp_dir/nezha-dashboard" "$BIN_PATH"
+        info "二进制已安装: ${BIN_PATH}"
+    fi
+
+    # 安装前端资源
+    if [[ -d "$tmp_dir/resource" ]]; then
+        mkdir -p "${INSTALL_DIR}/resource"
+        cp -r "$tmp_dir/resource/"* "${INSTALL_DIR}/resource/" 2>/dev/null || true
+        info "前端已安装: ${INSTALL_DIR}/resource/"
+    fi
+
+    rm -rf "$tmp_dir"
 }
 
 create_default_config() {
@@ -187,6 +209,7 @@ Type=simple
 User=root
 WorkingDirectory=${INSTALL_DIR}
 ExecStart=${BIN_PATH} -c ${CONFIG_FILE}
+Environment=NZ_RESOURCE_DIR=${INSTALL_DIR}/resource
 Restart=always
 RestartSec=5
 LimitNOFILE=65535
