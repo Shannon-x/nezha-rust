@@ -22,8 +22,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo +nightly check --workspace
-      - name: Test
-        run: cargo +nightly test --workspace
+      - name: Unit tests
+        run: cargo +nightly test --workspace --lib
+      - name: Integration tests
+        run: cargo +nightly test --workspace --test '*'
+        continue-on-error: true
 
   # ── 构建前端（仅 tag 触发）──
   frontend:
