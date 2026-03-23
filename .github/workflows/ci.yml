@@ -28,7 +28,7 @@ jobs:
         run: cargo +nightly test --workspace --test '*'
         continue-on-error: true
 
-  # ── 构建前端（仅 tag 触发）──
+  # ── 构建前端 + 下载 GeoIP（仅 tag 触发）──
   frontend:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -51,14 +51,22 @@ jobs:
           npm install --legacy-peer-deps
           npm run build
 
-      - name: Package frontend assets
+      - name: Download GeoIP Database
+        env:
+          IPINFO_TOKEN: ${{ secrets.IPINFO_TOKEN }}
+        run: |
+          echo "Downloading IPinfo GeoIP database..."
+          curl -fsSL -o geoip.db "https://ipinfo.io/data/free/country.mmdb?token=${IPINFO_TOKEN}"
+          ls -lh geoip.db
+          echo "GeoIP database downloaded."
+
+      - name: Package frontend + geoip
         run: |
           mkdir -p resource
-          # User 前端作为默认首页
           cp -r user-frontend-backup/dist/* resource/ 2>/dev/null || true
           cp -r user-frontend-backup/dist resource/user 2>/dev/null || true
-          # Admin 前端
           cp -r admin-frontend/dist resource/admin 2>/dev/null || true
+          cp geoip.db resource/geoip.db
           tar czf frontend-dist.tar.gz resource/
 
       - uses: actions/upload-artifact@v4
@@ -75,7 +83,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ── Linux ──
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             artifact: nezha-dashboard-linux-amd64
@@ -96,7 +103,6 @@ jobs:
             os: ubuntu-latest
             artifact: nezha-dashboard-linux-arm64-musl
             cross: true
-          # ── macOS ──
           - target: x86_64-apple-darwin
             os: macos-latest
             artifact: nezha-dashboard-darwin-amd64
@@ -105,7 +111,6 @@ jobs:
             os: macos-latest
             artifact: nezha-dashboard-darwin-arm64
             cross: false
-          # ── FreeBSD ──
           - target: x86_64-unknown-freebsd
             os: ubuntu-latest
             artifact: nezha-dashboard-freebsd-amd64
@@ -122,7 +127,6 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      # 下载前端产物
       - uses: actions/download-artifact@v4
         with:
           name: frontend-dist
@@ -130,7 +134,6 @@ jobs:
       - name: Extract frontend
         run: tar xzf frontend-dist.tar.gz
 
-      # 使用 cross 进行交叉编译
       - name: Install cross
         if: matrix.cross
         run: cargo install cross --git https://github.com/cross-rs/cross
@@ -143,7 +146,6 @@ jobs:
         if: matrix.cross
         run: cross +nightly build --release --target ${{ matrix.target }}
 
-      # 打包二进制 + 前端资源
       - name: Package
         run: |
           mkdir -p dist
@@ -201,6 +203,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            IPINFO_TOKEN=${{ secrets.IPINFO_TOKEN }}
 
   # ── GitHub Release ──
   release:
@@ -212,7 +216,11 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          pattern: nezha-dashboard-*
           merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la
 
       - uses: softprops/action-gh-release@v2
         with:

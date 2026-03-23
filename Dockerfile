@@ -1,7 +1,7 @@
-# ─── 阶段1: 构建前端 ───
+# ─── 阶段1: 构建前端 + 下载 GeoIP ───
 FROM node:20-bookworm-slim AS frontend
 
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /frontend
 
@@ -13,13 +13,20 @@ RUN git clone --depth 1 https://github.com/nezhahq/admin-frontend.git admin && \
 RUN git clone --depth 1 https://github.com/nezhahq/user-frontend-backup.git user && \
     cd user && npm install --legacy-peer-deps && npm run build
 
+# 下载 GeoIP 数据库
+ARG IPINFO_TOKEN=""
+RUN if [ -n "$IPINFO_TOKEN" ]; then \
+      curl -fsSL -o geoip.db "https://ipinfo.io/data/free/country.mmdb?token=${IPINFO_TOKEN}"; \
+    else \
+      echo "IPINFO_TOKEN not set, skipping GeoIP download" && touch geoip.db; \
+    fi
+
 # ─── 阶段2: 构建 Rust 后端 ───
 FROM rustlang/rust:nightly-bookworm AS builder
 
 WORKDIR /app
 COPY . .
 
-# 利用 Docker layer 缓存依赖
 RUN --mount=type=cache,target=/app/target \
     --mount=type=cache,target=/usr/local/cargo/registry \
     cargo build --release && \
@@ -34,16 +41,11 @@ RUN apt-get update && \
     groupadd -r nezha && useradd -r -g nezha nezha && \
     mkdir -p /data /opt/nezha/resource && chown -R nezha:nezha /data /opt/nezha
 
-# 复制 Rust 二进制
 COPY --from=builder /usr/local/bin/nezha-dashboard /usr/local/bin/nezha-dashboard
-
-# 复制前端产物
-# Admin 前端 → /opt/nezha/resource/admin/
 COPY --from=frontend /frontend/admin/dist /opt/nezha/resource/admin
-# User 前端 → /opt/nezha/resource/user/
 COPY --from=frontend /frontend/user/dist /opt/nezha/resource/user
-# 用户面板作为默认首页
 COPY --from=frontend /frontend/user/dist /opt/nezha/resource/
+COPY --from=frontend /frontend/geoip.db /opt/nezha/resource/geoip.db
 
 USER nezha
 WORKDIR /data
