@@ -15,7 +15,30 @@
 
 ## 快速开始
 
-### 方式一：Docker（推荐）
+### 🚀 一键安装（推荐）
+
+```bash
+# 安装
+curl -fsSL https://raw.githubusercontent.com/Shannon-x/nezha-rust/main/install.sh | bash -s -- install
+
+# 更新到最新版
+curl -fsSL https://raw.githubusercontent.com/Shannon-x/nezha-rust/main/install.sh | bash -s -- update
+
+# 查看状态
+curl -fsSL https://raw.githubusercontent.com/Shannon-x/nezha-rust/main/install.sh | bash -s -- status
+
+# 卸载（保留数据）
+curl -fsSL https://raw.githubusercontent.com/Shannon-x/nezha-rust/main/install.sh | bash -s -- uninstall
+
+# 或下载脚本交互式操作
+wget -O install.sh https://raw.githubusercontent.com/Shannon-x/nezha-rust/main/install.sh
+chmod +x install.sh
+sudo ./install.sh
+```
+
+自动完成：检测架构(amd64/arm64) → 下载最新版 → 生成配置 → 创建 systemd 服务 → 启动
+
+### 方式二：Docker
 
 ```bash
 # 拉取镜像
