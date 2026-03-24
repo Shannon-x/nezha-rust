@@ -109,21 +109,39 @@ impl RateLimiter {
     }
 }
 
-/// 从请求中提取 Bearer Token
+/// 从请求中提取 JWT Token
+/// 查找顺序与 Go 版 gin-jwt 一致：header: Authorization, query: token, cookie: nz-jwt
 fn extract_token(request: &Request) -> Option<String> {
-    // 先从 Authorization header 获取
+    // 1. 从 Authorization header 获取 (Bearer token)
     if let Some(auth) = request.headers().get("Authorization") {
         if let Ok(auth_str) = auth.to_str() {
             if let Some(token) = auth_str.strip_prefix("Bearer ") {
                 return Some(token.to_string());
             }
+            // 也支持 "Token xxx" 格式（API Token）
+            if let Some(token) = auth_str.strip_prefix("Token ") {
+                return Some(token.to_string());
+            }
         }
     }
-    // 再从 query string 获取 token 参数
+    // 2. 从 query string 获取 token 参数
     if let Some(query) = request.uri().query() {
         for pair in query.split('&') {
             if let Some(token) = pair.strip_prefix("token=") {
                 return Some(token.to_string());
+            }
+        }
+    }
+    // 3. 从 nz-jwt cookie 获取（与 Go 版 gin-jwt 兼容）
+    if let Some(cookie_header) = request.headers().get("cookie") {
+        if let Ok(cookies) = cookie_header.to_str() {
+            for cookie in cookies.split(';') {
+                let cookie = cookie.trim();
+                if let Some(token) = cookie.strip_prefix("nz-jwt=") {
+                    if !token.is_empty() {
+                        return Some(token.to_string());
+                    }
+                }
             }
         }
     }

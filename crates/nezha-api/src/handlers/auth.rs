@@ -1,9 +1,12 @@
-use axum::{extract::Extension, Json};
+use axum::extract::Extension;
+use axum::http::header::SET_COOKIE;
+use axum::response::{IntoResponse, Response};
+use axum::Json;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use nezha_core::models::common::CommonResponse;
-use nezha_core::models::user::{LoginForm, LoginResponse, User};
+use nezha_core::models::user::{LoginForm, LoginResponse};
 use nezha_service::AppState;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -18,11 +21,11 @@ pub struct Claims {
     pub iat: usize,     // issued at
 }
 
-/// 登录
+/// 登录 — 兼容 Go 版 gin-jwt 行为：返回 JSON + 设置 nz-jwt cookie
 pub async fn login(
     Extension(state): Extension<Arc<AppState>>,
     Json(form): Json<LoginForm>,
-) -> Json<CommonResponse<LoginResponse>> {
+) -> Response {
     // 查询用户
     let row: Option<(i64, String, String, i32)> = sqlx::query_as(
         "SELECT id, username, password, role FROM users WHERE username = ?"
@@ -34,13 +37,23 @@ pub async fn login(
 
     let (user_id, username, password_hash, role) = match row {
         Some(r) => r,
-        None => return Json(CommonResponse::error("用户名或密码错误")),
+        None => {
+            tracing::warn!("Login failed: user '{}' not found", form.username);
+            return Json(CommonResponse::<LoginResponse>::error("用户名或密码错误")).into_response();
+        }
     };
 
     // 验证密码
     match verify(&form.password, &password_hash) {
         Ok(true) => {}
-        _ => return Json(CommonResponse::error("用户名或密码错误")),
+        Ok(false) => {
+            tracing::warn!("Login failed: wrong password for user '{}'", username);
+            return Json(CommonResponse::<LoginResponse>::error("用户名或密码错误")).into_response();
+        }
+        Err(e) => {
+            tracing::error!("Login failed: bcrypt error for user '{}': {}", username, e);
+            return Json(CommonResponse::<LoginResponse>::error("用户名或密码错误")).into_response();
+        }
     }
 
     // 生成 JWT
@@ -65,13 +78,32 @@ pub async fn login(
         &EncodingKey::from_secret(state.config.jwt_secret_key.as_bytes()),
     ) {
         Ok(t) => t,
-        Err(e) => return Json(CommonResponse::error(format!("JWT生成失败: {}", e))),
+        Err(e) => {
+            return Json(CommonResponse::<LoginResponse>::error(format!("JWT生成失败: {}", e))).into_response();
+        }
     };
 
-    Json(CommonResponse::success(LoginResponse {
-        token,
+    tracing::info!("User '{}' logged in successfully", username);
+
+    // 构建响应 JSON
+    let body = CommonResponse::success(LoginResponse {
+        token: token.clone(),
         expire: (now + Duration::hours(expire_hours)).to_rfc3339(),
-    }))
+    });
+
+    // 设置 nz-jwt cookie（与 Go 版 gin-jwt 兼容）
+    let max_age = expire_hours * 3600;
+    let cookie = format!(
+        "nz-jwt={}; Path=/; Max-Age={}; HttpOnly; SameSite=Lax",
+        token, max_age
+    );
+
+    let mut response = Json(body).into_response();
+    response.headers_mut().insert(
+        SET_COOKIE,
+        cookie.parse().unwrap(),
+    );
+    response
 }
 
 /// 获取当前用户信息
