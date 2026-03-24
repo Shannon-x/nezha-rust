@@ -28,49 +28,63 @@ jobs:
         run: cargo +nightly test --workspace --test '*'
         continue-on-error: true
 
-  # ── 自动发版（push 到 main 时自动 bump patch 版本并打 tag）──
-  auto-tag:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'chore')
+  # ── 判断是否需要发版 ──
+  should-release:
     needs: check
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     outputs:
-      new_tag: ${{ steps.bump.outputs.new_tag }}
+      release: ${{ steps.decide.outputs.release }}
+      tag: ${{ steps.decide.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Get latest tag and bump version
-        id: bump
+      - name: Decide release
+        id: decide
         run: |
-          # 获取最新的 vX.Y.Z tag
-          LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
-          if [ -z "$LATEST_TAG" ]; then
-            NEW_TAG="v1.0.0"
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # 手动推 tag
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" && "${{ github.event_name }}" == "push" ]]; then
+            # push 到 main，自动 bump patch
+            COMMIT_MSG="${{ github.event.head_commit.message }}"
+            if [[ "$COMMIT_MSG" == chore* ]] || [[ "$COMMIT_MSG" == ci:* ]]; then
+              echo "Skipping release for chore/ci commit"
+              echo "release=false" >> "$GITHUB_OUTPUT"
+              echo "tag=" >> "$GITHUB_OUTPUT"
+            else
+              LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+              if [ -z "$LATEST_TAG" ]; then
+                NEW_TAG="v1.0.0"
+              else
+                VERSION=${LATEST_TAG#v}
+                MAJOR=$(echo $VERSION | cut -d. -f1)
+                MINOR=$(echo $VERSION | cut -d. -f2)
+                PATCH=$(echo $VERSION | cut -d. -f3)
+                NEW_PATCH=$((PATCH + 1))
+                NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+              fi
+              echo "Auto-release: $LATEST_TAG -> $NEW_TAG"
+              echo "release=true" >> "$GITHUB_OUTPUT"
+              echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+
+              # 创建 tag
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
+              git push origin "$NEW_TAG"
+            fi
           else
-            # 解析版本号并 bump patch
-            VERSION=${LATEST_TAG#v}
-            MAJOR=$(echo $VERSION | cut -d. -f1)
-            MINOR=$(echo $VERSION | cut -d. -f2)
-            PATCH=$(echo $VERSION | cut -d. -f3)
-            NEW_PATCH=$((PATCH + 1))
-            NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "tag=" >> "$GITHUB_OUTPUT"
           fi
-          echo "Latest tag: $LATEST_TAG -> New tag: $NEW_TAG"
-          echo "new_tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Create and push tag
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ steps.bump.outputs.new_tag }}" -m "Release ${{ steps.bump.outputs.new_tag }}"
-          git push origin "${{ steps.bump.outputs.new_tag }}"
-
-  # ── 构建前端 + 下载 GeoIP（tag 触发）──
+  # ── 构建前端 + 下载 GeoIP ──
   frontend:
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: should-release
+    if: needs.should-release.outputs.release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-node@v4
@@ -115,10 +129,10 @@ jobs:
           path: frontend-dist.tar.gz
           retention-days: 1
 
-  # ── 多平台构建（tag 触发）──
+  # ── 多平台构建 ──
   build:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [check, frontend]
+    needs: [should-release, frontend]
+    if: needs.should-release.outputs.release == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -206,8 +220,8 @@ jobs:
 
   # ── Docker 镜像 ──
   docker:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: check
+    needs: should-release
+    if: needs.should-release.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -230,8 +244,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ needs.should-release.outputs.tag }}
             type=raw,value=latest
 
       - uses: docker/build-push-action@v6
@@ -248,8 +261,8 @@ jobs:
 
   # ── GitHub Release ──
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, docker]
+    needs: [should-release, build, docker]
+    if: needs.should-release.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -264,6 +277,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.should-release.outputs.tag }}
           generate_release_notes: true
           files: |
             nezha-dashboard-*.tar.gz
