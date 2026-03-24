@@ -147,11 +147,10 @@ pub async fn get_history(
     }
 }
 
-/// 管理列表（分页支持）
+/// 管理列表 — 返回数组（与 Go 版 listHandler 兼容）
 pub async fn list(
     Extension(state): Extension<Arc<AppState>>,
-    Query(page): Query<Pagination>,
-) -> Json<CommonResponse<serde_json::Value>> {
+) -> Json<CommonResponse<Vec<ServiceListView>>> {
     let mut services: Vec<ServiceListView> = state.services
         .iter()
         .map(|e| {
@@ -168,18 +167,9 @@ pub async fn list(
         .collect();
     services.sort_unstable_by(|a, b| a.display_index.cmp(&b.display_index).then(a.id.cmp(&b.id)));
 
-    let total = services.len();
-    let data = if page.limit > 0 {
-        let start = (page.page.saturating_sub(1)) * page.limit;
-        let end = (start + page.limit).min(total);
-        services[start.min(total)..end].to_vec()
-    } else {
-        services
-    };
-    Json(CommonResponse::success(serde_json::json!({
-        "data": data, "total": total, "page": page.page, "limit": page.limit
-    })))
+    Json(CommonResponse::success(services))
 }
+
 
 /// 创建服务（强类型 form，零 json!）
 pub async fn create(

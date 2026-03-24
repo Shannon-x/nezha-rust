@@ -67,11 +67,11 @@ pub struct CreateServerResponse {
     pub uuid: String,
 }
 
-/// 获取所有服务器列表（零 json! 分配 + 分页支持）
+/// 获取所有服务器列表
+/// Go 版 listHandler 返回 CommonResponse[[]Server]，data 是一个数组
 pub async fn list(
     Extension(state): Extension<Arc<AppState>>,
-    Query(page): Query<Pagination>,
-) -> Json<CommonResponse<PaginatedResponse<ServerView>>> {
+) -> Json<CommonResponse<Vec<ServerView>>> {
     let mut servers: Vec<ServerView> = state.servers
         .iter()
         .map(|entry| {
@@ -101,22 +101,9 @@ pub async fn list(
         a.display_index.cmp(&b.display_index).then(a.id.cmp(&b.id))
     });
 
-    let total = servers.len();
-    let (data, limit_val) = if page.limit > 0 {
-        let start = (page.page.saturating_sub(1)) * page.limit;
-        let end = (start + page.limit).min(total);
-        (servers[start.min(total)..end].to_vec(), page.limit)
-    } else {
-        (servers, 0)
-    };
-
-    Json(CommonResponse::success(PaginatedResponse {
-        data,
-        total,
-        page: page.page,
-        limit: limit_val,
-    }))
+    Json(CommonResponse::success(servers))
 }
+
 
 /// 获取服务器指标（零 json! 分配）
 pub async fn get_metrics(

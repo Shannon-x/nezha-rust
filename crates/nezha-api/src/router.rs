@@ -108,9 +108,18 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/nat/{id}", patch(handlers::nat::update))
         .route("/api/v1/batch-delete/nat", post(handlers::nat::batch_delete))
 
+        // WAF
+        .route("/api/v1/waf", get(handlers::setting::list_waf))
+        .route("/api/v1/batch-delete/waf", post(handlers::setting::batch_delete_waf))
+
+        // 在线用户
+        .route("/api/v1/online-user", get(handlers::setting::list_online_users))
+        .route("/api/v1/online-user/batch-block", post(handlers::setting::batch_block_online_user))
+
         // 设置
         .route("/api/v1/setting", patch(handlers::setting::update_config))
         .route("/api/v1/maintenance", post(handlers::setting::run_maintenance))
+
 
         .layer(middleware::from_fn_with_state(
             state.clone(),

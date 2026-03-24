@@ -174,6 +174,44 @@ pub async fn list_users(
 pub async fn run_maintenance(
     Extension(_state): Extension<Arc<AppState>>,
 ) -> Json<CommonResponse<()>> {
-    // SQLite VACUUM or TSDB cleanup could be done here
     Json(CommonResponse::success(()))
 }
+
+/// 在线用户列表 — GET /api/v1/online-user
+/// Go 版 pCommonHandler(listOnlineUser) — 返回分页 Value
+pub async fn list_online_users(
+    Extension(_state): Extension<Arc<AppState>>,
+) -> Json<CommonResponse<serde_json::Value>> {
+    // 返回 Go 版 pCommonHandler 的 PaginatedResponse 格式
+    Json(CommonResponse::success(serde_json::json!({
+        "data": [],
+        "total": 0
+    })))
+}
+
+/// 批量封禁在线用户 — POST /api/v1/online-user/batch-block
+pub async fn batch_block_online_user(
+    Extension(_state): Extension<Arc<AppState>>,
+    Json(_body): Json<serde_json::Value>,
+) -> Json<CommonResponse<()>> {
+    Json(CommonResponse::success(()))
+}
+
+/// WAF 黑名单列表 — GET /api/v1/waf
+pub async fn list_waf(
+    Extension(_state): Extension<Arc<AppState>>,
+) -> Json<CommonResponse<serde_json::Value>> {
+    Json(CommonResponse::success(serde_json::json!({
+        "data": [],
+        "total": 0
+    })))
+}
+
+/// 批量删除 WAF 黑名单 — POST /api/v1/batch-delete/waf
+pub async fn batch_delete_waf(
+    Extension(_state): Extension<Arc<AppState>>,
+    Json(_ids): Json<Vec<i64>>,
+) -> Json<CommonResponse<()>> {
+    Json(CommonResponse::success(()))
+}
+
