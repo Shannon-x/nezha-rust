@@ -100,10 +100,10 @@ jobs:
           npm install --legacy-peer-deps
           npm run build
 
-      - name: Build User Frontend
+      - name: Build User Frontend (nezha-dash)
         run: |
-          git clone --depth 1 https://github.com/nezhahq/user-frontend-backup.git
-          cd user-frontend-backup
+          git clone --depth 1 https://github.com/hamster1963/nezha-dash.git
+          cd nezha-dash
           npm install --legacy-peer-deps
           npm run build
 
@@ -119,8 +119,8 @@ jobs:
       - name: Package frontend + geoip
         run: |
           mkdir -p resource
-          cp -r user-frontend-backup/dist/* resource/ 2>/dev/null || true
-          cp -r user-frontend-backup/dist resource/user 2>/dev/null || true
+          cp -r nezha-dash/dist/* resource/ 2>/dev/null || true
+          cp -r nezha-dash/dist resource/user 2>/dev/null || true
           cp -r admin-frontend/dist resource/admin 2>/dev/null || true
           cp geoip.db resource/geoip.db
           tar czf frontend-dist.tar.gz resource/
