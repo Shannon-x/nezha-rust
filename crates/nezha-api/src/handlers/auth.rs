@@ -112,8 +112,8 @@ pub async fn get_profile(
     Extension(state): Extension<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
 ) -> Json<CommonResponse<serde_json::Value>> {
-    let row: Option<(i64, String, i32, String)> = sqlx::query_as(
-        "SELECT id, username, role, COALESCE(agent_secret,'') FROM users WHERE id = ?"
+    let row: Option<(i64, String, i32)> = sqlx::query_as(
+        "SELECT id, username, role FROM users WHERE id = ?"
     )
     .bind(claims.sub)
     .fetch_optional(&state.db.pool)
@@ -121,7 +121,13 @@ pub async fn get_profile(
     .unwrap_or(None);
 
     match row {
-        Some((id, username, role, agent_secret)) => {
+        Some((id, username, role)) => {
+            // 管理员返回全局 agent_secret_key（用于一键安装命令）
+            let agent_secret = if role == 0 {
+                state.config.read().await.agent_secret_key.clone()
+            } else {
+                String::new()
+            };
             Json(CommonResponse::success(serde_json::json!({
                 "id": id,
                 "username": username,
