@@ -245,7 +245,7 @@ pub async fn ensure_admin(state: &AppState) -> anyhow::Result<()> {
         .bind(now.as_str())
         .bind("admin")
         .bind(&password_hash)
-        .bind(1i32)
+        .bind(0i32)  // Go 版 role=0 为管理员，前端 profile.role === 0 判断管理员
         .execute(&state.db.pool)
         .await?;
         tracing::info!("NEZHA>> 已创建默认管理员账户 admin/admin");
