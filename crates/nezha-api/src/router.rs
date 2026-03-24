@@ -7,7 +7,7 @@ use axum::{
 use nezha_service::AppState;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 
 use crate::handlers;
 
@@ -78,17 +78,29 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         ));
 
     // ── 静态文件服务 ──
-    // Go 版前端 build 产物放在 resource/dist (admin) 或 resource/template/theme-* (user)
-    // 支持自定义路径：环境变量 NZ_RESOURCE_DIR（默认 resource）
     let resource_dir = std::env::var("NZ_RESOURCE_DIR").unwrap_or_else(|_| "resource".to_string());
-    let static_service = ServeDir::new(&resource_dir)
-        .append_index_html_on_directories(true);
+
+    // Admin 前端 SPA: /dashboard/* → resource/admin/
+    // 对所有非静态文件路由回退到 index.html（SPA 客户端路由）
+    let admin_dir = format!("{}/admin", resource_dir);
+    let admin_index = format!("{}/admin/index.html", resource_dir);
+    let admin_spa = ServeDir::new(&admin_dir)
+        .append_index_html_on_directories(true)
+        .fallback(ServeFile::new(&admin_index));
+
+    // User 前端 SPA: /* → resource/ (回退到 index.html)
+    let user_index = format!("{}/index.html", resource_dir);
+    let user_spa = ServeDir::new(&resource_dir)
+        .append_index_html_on_directories(true)
+        .fallback(ServeFile::new(&user_index));
 
     Router::new()
         .merge(public)
         .merge(optional_auth)
         .merge(auth)
-        .fallback_service(static_service)
+        .nest_service("/dashboard", admin_spa)
+        .fallback_service(user_spa)
         .layer(CorsLayer::permissive())
         .layer(Extension(state))
 }
+
