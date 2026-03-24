@@ -42,8 +42,9 @@ async fn main() -> anyhow::Result<()> {
     // 加载配置
     let config = Config::load(config_path)
         .with_context(|| format!("Failed to load config from '{}'", config_path))?;
+    let host = if config.listen_host.is_empty() { "0.0.0.0" } else { &config.listen_host };
     let listen_addr: SocketAddr =
-        format!("{}:{}", config.listen_host, config.listen_port).parse()?;
+        format!("{}:{}", host, config.listen_port).parse()?;
 
     // 初始化 i18n
     nezha_utils::i18n::init_i18n(&config.language);

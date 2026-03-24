@@ -17,15 +17,29 @@ impl Database {
 
         info!("Connecting to {} database...", db_type);
 
+        // 对于 SQLite, 确保父目录存在
+        if db_type == "sqlite" || db_type.is_empty() {
+            if let Some(parent) = std::path::Path::new(&config.path).parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+        }
+
         // 安装所有数据库驱动
         sqlx::any::install_default_drivers();
+
+        // 对于 SQLite, 添加 create_if_missing 参数
+        let connect_dsn = if (db_type == "sqlite" || db_type.is_empty()) && !dsn.contains('?') {
+            format!("{}?mode=rwc", dsn)
+        } else {
+            dsn
+        };
 
         let pool = AnyPoolOptions::new()
             .max_connections(50)
             .min_connections(5)
             .acquire_timeout(std::time::Duration::from_secs(30))
             .idle_timeout(std::time::Duration::from_secs(600))
-            .connect(&dsn)
+            .connect(&connect_dsn)
             .await?;
 
         info!("Database connected: {}", db_type);
