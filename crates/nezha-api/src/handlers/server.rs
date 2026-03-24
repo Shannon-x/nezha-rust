@@ -220,17 +220,30 @@ pub async fn create(
     }
 }
 
-/// 获取服务器配置 — GET /api/v1/server/config/:id
+/// 获取服务器安装命令 — GET /api/v1/server/config/:id
+/// 返回一键安装命令字符串（前端 getServerConfig 使用）
 pub async fn get_config(
     Extension(state): Extension<Arc<AppState>>,
     Path(id): Path<u64>,
-) -> Json<CommonResponse<serde_json::Value>> {
+) -> Json<CommonResponse<String>> {
+    let cfg = state.config.read().await;
+    let agent_secret = &cfg.agent_secret_key;
+    let install_host = if cfg.install_host.is_empty() {
+        format!("localhost:{}", cfg.listen_port)
+    } else {
+        cfg.install_host.clone()
+    };
+    let tls_flag = if cfg.tls { " --tls" } else { "" };
+
     match state.servers.get(&id) {
-        Some(s) => Json(CommonResponse::success(serde_json::json!({
-            "id": s.id,
-            "name": s.name,
-            "uuid": s.uuid,
-        }))),
+        Some(_s) => {
+            // 一键安装命令，指向 Shannon-x/agent-rust
+            let cmd = format!(
+                "curl -L https://raw.githubusercontent.com/Shannon-x/agent-rust/main/install.sh -o agent-install.sh && chmod +x agent-install.sh && sudo ./agent-install.sh -s {} -p {}{}",
+                install_host, agent_secret, tls_flag
+            );
+            Json(CommonResponse::success(cmd))
+        }
         None => Json(CommonResponse::error("服务器不存在")),
     }
 }
