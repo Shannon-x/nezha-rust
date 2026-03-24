@@ -104,8 +104,10 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/hamster1963/nezha-dash.git
           cd nezha-dash
-          npm install --legacy-peer-deps
-          npm run build
+          corepack enable
+          corepack prepare pnpm@latest --activate
+          pnpm install
+          pnpm run build
 
       - name: Download GeoIP Database
         env:
@@ -119,8 +121,9 @@ jobs:
       - name: Package frontend + geoip
         run: |
           mkdir -p resource
-          cp -r nezha-dash/dist/* resource/ 2>/dev/null || true
-          cp -r nezha-dash/dist resource/user 2>/dev/null || true
+          # nezha-dash uses Next.js standalone output
+          cp -r nezha-dash/.next/standalone/* resource/ 2>/dev/null || true
+          cp -r nezha-dash/.next/standalone resource/user 2>/dev/null || true
           cp -r admin-frontend/dist resource/admin 2>/dev/null || true
           cp geoip.db resource/geoip.db
           tar czf frontend-dist.tar.gz resource/

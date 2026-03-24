@@ -32,7 +32,8 @@ pub async fn auth_required(
         }
     };
 
-    match decode_token(&token, &state.config.jwt_secret_key) {
+    let jwt_secret = state.config.read().await.jwt_secret_key.clone();
+    match decode_token(&token, &jwt_secret) {
         Some(claims) => {
             request.extensions_mut().insert(claims);
             next.run(request).await
@@ -52,7 +53,8 @@ pub async fn auth_optional(
     next: Next,
 ) -> Response {
     if let Some(token) = extract_token(&request) {
-        if let Some(claims) = decode_token(&token, &state.config.jwt_secret_key) {
+        let jwt_secret = state.config.read().await.jwt_secret_key.clone();
+        if let Some(claims) = decode_token(&token, &jwt_secret) {
             request.extensions_mut().insert(claims);
         }
     }
@@ -66,7 +68,7 @@ pub async fn admin_required(
 ) -> Response {
     let claims = request.extensions().get::<Claims>().cloned();
     match claims {
-        Some(c) if c.role == 1 => next.run(request).await,
+        Some(c) if c.role == 0 => next.run(request).await,  // Go 版 role=0 为管理员
         _ => (
             StatusCode::FORBIDDEN,
             Json(CommonResponse::<()>::error("需要管理员权限")),

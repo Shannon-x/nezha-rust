@@ -58,8 +58,9 @@ pub async fn login(
 
     // 生成 JWT
     let now = Utc::now();
-    let expire_hours = if state.config.jwt_timeout > 0 {
-        state.config.jwt_timeout as i64 * 24
+    let cfg = state.config.read().await;
+    let expire_hours = if cfg.jwt_timeout > 0 {
+        cfg.jwt_timeout as i64 * 24
     } else {
         24
     };
@@ -75,7 +76,7 @@ pub async fn login(
     let token = match encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(state.config.jwt_secret_key.as_bytes()),
+        &EncodingKey::from_secret(cfg.jwt_secret_key.as_bytes()),
     ) {
         Ok(t) => t,
         Err(e) => {
@@ -150,8 +151,9 @@ pub async fn refresh_token(
     Extension(claims): Extension<Claims>,
 ) -> Response {
     let now = Utc::now();
-    let expire_hours = if state.config.jwt_timeout > 0 {
-        state.config.jwt_timeout as i64 * 24
+    let cfg = state.config.read().await;
+    let expire_hours = if cfg.jwt_timeout > 0 {
+        cfg.jwt_timeout as i64 * 24
     } else {
         24
     };
@@ -167,7 +169,7 @@ pub async fn refresh_token(
     let token = match encode(
         &Header::default(),
         &new_claims,
-        &EncodingKey::from_secret(state.config.jwt_secret_key.as_bytes()),
+        &EncodingKey::from_secret(cfg.jwt_secret_key.as_bytes()),
     ) {
         Ok(t) => t,
         Err(e) => {

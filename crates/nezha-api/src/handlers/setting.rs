@@ -9,24 +9,17 @@ use std::sync::Arc;
 pub async fn get_config(
     Extension(state): Extension<Arc<AppState>>,
 ) -> Json<CommonResponse<serde_json::Value>> {
-    let config = &state.config;
+    let config = state.config.read().await;
     let language = config.language.replace('_', "-");
-
-    // 构造与 Go 版完全一致的 SettingResponse
-    // SettingResponse { config: Setting, version, frontend_templates, tsdb_enabled }
-    // Setting = ConfigForGuests + ConfigDashboard + ignored_ip_notification_server_ids + oauth2_providers
 
     let oauth2_providers: Vec<String> = config.oauth2.keys().cloned().collect();
 
     let setting_response = serde_json::json!({
         "config": {
-            // ConfigForGuests
             "language": language,
             "site_name": config.site_name,
             "custom_code": config.custom_code,
             "custom_code_dashboard": config.custom_code_dashboard,
-
-            // ConfigDashboard
             "install_host": config.install_host,
             "tls": config.tls,
             "web_real_ip_header": config.web_real_ip_header,
@@ -39,8 +32,6 @@ pub async fn get_config(
             "cover": config.cover,
             "ignored_ip_notification": config.ignored_ip_notification,
             "dns_servers": config.dns_servers,
-
-            // 额外字段
             "ignored_ip_notification_server_ids": config.ignored_ip_notification_server_ids,
             "oauth2_providers": oauth2_providers,
         },
@@ -66,19 +57,70 @@ pub async fn get_config(
 }
 
 /// 更新设置 — PATCH /api/v1/setting
+/// 从前端表单接收字段，更新内存中的 Config，并保存到 YAML 文件
 pub async fn update_config(
     Extension(state): Extension<Arc<AppState>>,
     Json(body): Json<serde_json::Value>,
 ) -> Json<CommonResponse<()>> {
-    // 更新配置并保存
-    let now = Utc::now().naive_utc().format("%Y-%m-%d %H:%M:%S").to_string();
-    if let Some(config_json) = serde_json::to_string(&body).ok() {
-        sqlx::query("INSERT OR REPLACE INTO config (key, value, updated_at) VALUES ('settings', ?, ?)")
-            .bind(&config_json).bind(now.as_str())
-            .execute(&state.db.pool).await.ok();
+    let mut config = state.config.write().await;
+
+    // 逐字段更新（前端 settingFormSchema 提交的字段）
+    if let Some(v) = body.get("site_name").and_then(|v| v.as_str()) {
+        config.site_name = v.to_string();
     }
+    if let Some(v) = body.get("language").and_then(|v| v.as_str()) {
+        config.language = v.to_string();
+    }
+    if let Some(v) = body.get("install_host").and_then(|v| v.as_str()) {
+        config.install_host = v.to_string();
+    }
+    if let Some(v) = body.get("custom_code").and_then(|v| v.as_str()) {
+        config.custom_code = v.to_string();
+    }
+    if let Some(v) = body.get("custom_code_dashboard").and_then(|v| v.as_str()) {
+        config.custom_code_dashboard = v.to_string();
+    }
+    if let Some(v) = body.get("web_real_ip_header").and_then(|v| v.as_str()) {
+        config.web_real_ip_header = v.to_string();
+    }
+    if let Some(v) = body.get("agent_real_ip_header").and_then(|v| v.as_str()) {
+        config.agent_real_ip_header = v.to_string();
+    }
+    if let Some(v) = body.get("user_template").and_then(|v| v.as_str()) {
+        config.user_template = v.to_string();
+    }
+    if let Some(v) = body.get("dns_servers").and_then(|v| v.as_str()) {
+        config.dns_servers = v.to_string();
+    }
+    if let Some(v) = body.get("ignored_ip_notification").and_then(|v| v.as_str()) {
+        config.ignored_ip_notification = v.to_string();
+    }
+    if let Some(v) = body.get("tls").and_then(|v| v.as_bool()) {
+        config.tls = v;
+    }
+    if let Some(v) = body.get("enable_ip_change_notification").and_then(|v| v.as_bool()) {
+        config.enable_ip_change_notification = v;
+    }
+    if let Some(v) = body.get("enable_plain_ip_in_notification").and_then(|v| v.as_bool()) {
+        config.enable_plain_ip_in_notification = v;
+    }
+    if let Some(v) = body.get("cover").and_then(|v| v.as_u64()) {
+        config.cover = v as u8;
+    }
+    if let Some(v) = body.get("ip_change_notification_group_id").and_then(|v| v.as_u64()) {
+        config.ip_change_notification_group_id = v;
+    }
+
+    // 保存到 YAML 文件
+    if let Err(e) = config.save() {
+        tracing::error!("Failed to save config: {}", e);
+        return Json(CommonResponse::error(format!("保存配置失败: {}", e)));
+    }
+
+    tracing::info!("Config saved successfully");
     Json(CommonResponse::success(()))
 }
+
 
 /// 列出通知组 — GET /api/v1/notification-group
 pub async fn list_notification_groups(

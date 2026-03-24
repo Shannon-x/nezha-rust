@@ -7,12 +7,13 @@ use nezha_core::models::service::Service;
 use nezha_tsdb::Store;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, RwLock};
 use chrono::Utc;
 
 /// 全局应用状态（替代 Go 的全局 singleton 变量）
 pub struct AppState {
-    pub config: Config,
+    /// 配置（RwLock 支持运行时修改 + 持久化）
+    pub config: RwLock<Config>,
     pub db: Database,
 
     /// 服务器列表（并发安全 map）
@@ -80,7 +81,7 @@ impl AppState {
         let (tx, _rx) = mpsc::channel::<Service>(200);
 
         let state = Arc::new(Self {
-            config,
+            config: RwLock::new(config),
             db,
             servers: DashMap::new(),
             services: DashMap::new(),
@@ -126,11 +127,12 @@ impl AppState {
     }
 
     /// IP 脱敏
-    pub fn ip_desensitize(&self, ip: &str) -> String {
-        if self.config.enable_plain_ip_in_notification {
+    pub async fn ip_desensitize(&self, ip: &str) -> String {
+        if self.config.read().await.enable_plain_ip_in_notification {
             ip.to_string()
         } else {
             nezha_utils::ip_desensitize(ip)
         }
     }
 }
+

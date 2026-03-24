@@ -6,13 +6,14 @@ use tonic::{metadata::MetadataMap, Status};
 /// 支持两种模式：
 /// - client_uuid: Agent-Rust 发送 UUID 字符串，按 server.uuid 查找
 /// - client_id: 旧版 Agent 发送数字 ID，直接按 key 查找
-pub fn check_auth(metadata: &MetadataMap, state: &Arc<AppState>) -> Result<u64, Status> {
+pub async fn check_auth(metadata: &MetadataMap, state: &Arc<AppState>) -> Result<u64, Status> {
     let secret = metadata
         .get("client_secret")
         .and_then(|v| v.to_str().ok())
         .ok_or_else(|| Status::unauthenticated("missing client_secret"))?;
 
-    if secret != state.config.agent_secret_key {
+    let agent_key = state.config.read().await.agent_secret_key.clone();
+    if secret != agent_key {
         return Err(Status::unauthenticated("invalid secret key"));
     }
 

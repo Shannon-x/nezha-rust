@@ -29,7 +29,7 @@ impl NezhaService for NezhaHandler {
         let state = self.state.clone();
 
         // 验证 Agent 身份
-        let client_id = crate::auth::check_auth(request.metadata(), &state)?;
+        let client_id = crate::auth::check_auth(request.metadata(), &state).await?;
 
         let mut stream = request.into_inner();
         tokio::spawn(async move {
@@ -118,7 +118,7 @@ impl NezhaService for NezhaHandler {
         &self,
         request: Request<Host>,
     ) -> Result<Response<Receipt>, Status> {
-        let client_id = crate::auth::check_auth(request.metadata(), &self.state)?;
+        let client_id = crate::auth::check_auth(request.metadata(), &self.state).await?;
         let host = nezha_core::models::host::Host::from_pb(request.get_ref());
 
         if let Some(mut server) = self.state.servers.get_mut(&client_id) {
@@ -132,7 +132,7 @@ impl NezhaService for NezhaHandler {
         &self,
         request: Request<Host>,
     ) -> Result<Response<Uint64Receipt>, Status> {
-        let client_id = crate::auth::check_auth(request.metadata(), &self.state)?;
+        let client_id = crate::auth::check_auth(request.metadata(), &self.state).await?;
         let host = nezha_core::models::host::Host::from_pb(request.get_ref());
 
         if let Some(mut server) = self.state.servers.get_mut(&client_id) {
@@ -151,7 +151,7 @@ impl NezhaService for NezhaHandler {
         &self,
         request: Request<Streaming<TaskResult>>,
     ) -> Result<Response<Self::RequestTaskStream>, Status> {
-        let client_id = crate::auth::check_auth(request.metadata(), &self.state)?;
+        let client_id = crate::auth::check_auth(request.metadata(), &self.state).await?;
         let (tx, rx) = tokio::sync::mpsc::channel(128);
         let mut stream = request.into_inner();
 
@@ -176,7 +176,7 @@ impl NezhaService for NezhaHandler {
         &self,
         request: Request<Streaming<IoStreamData>>,
     ) -> Result<Response<Self::IOStreamStream>, Status> {
-        let _client_id = crate::auth::check_auth(request.metadata(), &self.state)?;
+        let _client_id = crate::auth::check_auth(request.metadata(), &self.state).await?;
         let (tx, rx) = tokio::sync::mpsc::channel(128);
 
         // TODO: 实现完整的 IO 流隧道
@@ -189,7 +189,7 @@ impl NezhaService for NezhaHandler {
         &self,
         request: Request<GeoIp>,
     ) -> Result<Response<GeoIp>, Status> {
-        let client_id = crate::auth::check_auth(request.metadata(), &self.state)?;
+        let client_id = crate::auth::check_auth(request.metadata(), &self.state).await?;
         let pb_geoip = request.into_inner();
         let geoip = nezha_core::models::host::geoip_from_pb(&pb_geoip);
 

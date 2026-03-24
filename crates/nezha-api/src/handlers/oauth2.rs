@@ -25,13 +25,14 @@ pub struct OAuth2CallbackParams {
 pub async fn list_providers(
     Extension(state): Extension<Arc<AppState>>,
 ) -> Json<CommonResponse<Vec<serde_json::Value>>> {
-    let providers: Vec<serde_json::Value> = state.config.oauth2
+    let cfg = state.config.read().await;
+    let providers: Vec<serde_json::Value> = cfg.oauth2
         .iter()
-        .map(|(name, cfg)| {
+        .map(|(name, c)| {
             serde_json::json!({
                 "name": name,
-                "redirect_url": cfg.redirect_url,
-                "has_config": !cfg.client_id.is_empty(),
+                "redirect_url": c.redirect_url,
+                "has_config": !c.client_id.is_empty(),
             })
         })
         .collect();
@@ -45,8 +46,9 @@ pub async fn authorize(
 ) -> impl IntoResponse {
     let provider = params.get("provider").map(|s| s.as_str()).unwrap_or("");
 
-    let oauth2_config = match state.config.oauth2.get(provider) {
-        Some(cfg) if !cfg.client_id.is_empty() => cfg,
+    let cfg = state.config.read().await;
+    let oauth2_config = match cfg.oauth2.get(provider) {
+        Some(c) if !c.client_id.is_empty() => c,
         _ => return Redirect::to("/api/v1/oauth2/error?msg=invalid_provider").into_response(),
     };
 
@@ -89,8 +91,9 @@ pub async fn callback(
     };
 
     // 查找匹配的 OAuth2 provider（通过 state 或默认第一个）
-    let (provider_name, oauth2_config) = match state.config.oauth2.iter().next() {
-        Some((name, cfg)) => (name.clone(), cfg.clone()),
+    let cfg = state.config.read().await;
+    let (provider_name, oauth2_config) = match cfg.oauth2.iter().next() {
+        Some((name, c)) => (name.clone(), c.clone()),
         None => return Json(CommonResponse::error("No OAuth2 provider configured")),
     };
 
@@ -194,8 +197,8 @@ pub async fn callback(
     };
 
     // Step 5: 生成 JWT
-    let expire_hours = if state.config.jwt_timeout > 0 {
-        state.config.jwt_timeout as i64 * 24
+    let expire_hours = if cfg.jwt_timeout > 0 {
+        cfg.jwt_timeout as i64 * 24
     } else {
         24
     };
@@ -211,7 +214,7 @@ pub async fn callback(
     let token = match encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(state.config.jwt_secret_key.as_bytes()),
+        &EncodingKey::from_secret(cfg.jwt_secret_key.as_bytes()),
     ) {
         Ok(t) => t,
         Err(e) => return Json(CommonResponse::error(format!("JWT生成失败: {}", e))),
