@@ -1,9 +1,9 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
 
+use anyhow::Context;
 use nezha_api::create_router;
 use nezha_core::Config;
-use nezha_rpc::NezhaHandler;
+
 use nezha_service::AppState;
 use nezha_service::sentinel::ServiceSentinel;
 use nezha_service::alert::AlertSentinel;
@@ -40,7 +40,8 @@ async fn main() -> anyhow::Result<()> {
     info!("NEZHA>> Starting Nezha Dashboard v{}", VERSION);
 
     // 加载配置
-    let config = Config::load(config_path)?;
+    let config = Config::load(config_path)
+        .with_context(|| format!("Failed to load config from '{}'", config_path))?;
     let listen_addr: SocketAddr =
         format!("{}:{}", config.listen_host, config.listen_port).parse()?;
 
@@ -48,7 +49,8 @@ async fn main() -> anyhow::Result<()> {
     nezha_utils::i18n::init_i18n(&config.language);
 
     // 初始化应用状态
-    let state = AppState::new(config).await?;
+    let state = AppState::new(config).await
+        .context("Failed to initialize application state (check database/TSDB path permissions)")?;
 
     // 创建默认管理员账户
     nezha_api::handlers::auth::ensure_admin(&state).await?;

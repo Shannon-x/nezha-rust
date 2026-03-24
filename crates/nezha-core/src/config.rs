@@ -391,13 +391,24 @@ impl Config {
         config.apply_env_overrides();
 
         // 确保必要的密钥存在
+        let mut need_save = false;
         if config.jwt_secret_key.is_empty() {
             config.jwt_secret_key = nezha_utils::generate_random_string(1024);
-            config.save()?;
+            need_save = true;
         }
         if config.agent_secret_key.is_empty() {
             config.agent_secret_key = nezha_utils::generate_random_string(32);
-            config.save()?;
+            need_save = true;
+        }
+        if need_save {
+            if let Err(e) = config.save() {
+                tracing::warn!(
+                    "Failed to persist auto-generated keys to config file '{}': {}. \
+                     The generated keys will be used in memory but will not survive a restart. \
+                     Please ensure the config directory is writable.",
+                    path, e
+                );
+            }
         }
 
         // 解析 ignored_ip_notification

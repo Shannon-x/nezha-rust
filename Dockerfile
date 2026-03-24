@@ -38,8 +38,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates tzdata curl && \
     rm -rf /var/lib/apt/lists/* && \
-    groupadd -r nezha && useradd -r -g nezha nezha && \
-    mkdir -p /data /opt/nezha/resource && chown -R nezha:nezha /data /opt/nezha
+    mkdir -p /data /opt/nezha/resource
 
 COPY --from=builder /usr/local/bin/nezha-dashboard /usr/local/bin/nezha-dashboard
 COPY --from=frontend /frontend/admin/dist /opt/nezha/resource/admin
@@ -47,7 +46,6 @@ COPY --from=frontend /frontend/user/dist /opt/nezha/resource/user
 COPY --from=frontend /frontend/user/dist /opt/nezha/resource/
 COPY --from=frontend /frontend/geoip.db /opt/nezha/resource/geoip.db
 
-USER nezha
 WORKDIR /data
 
 ENV TZ=Asia/Shanghai \
@@ -62,3 +60,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 
 ENTRYPOINT ["nezha-dashboard"]
 CMD ["-c", "/data/config.yaml"]
+
