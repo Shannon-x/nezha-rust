@@ -32,6 +32,8 @@ jobs:
   should-release:
     needs: check
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       release: ${{ steps.decide.outputs.release }}
       tag: ${{ steps.decide.outputs.tag }}
