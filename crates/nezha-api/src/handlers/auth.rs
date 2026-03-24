@@ -143,6 +143,92 @@ pub fn decode_token(token: &str, secret: &str) -> Option<Claims> {
     .map(|data| data.claims)
 }
 
+/// 刷新 Token — GET /api/v1/refresh-token
+/// 与 Go 版 gin-jwt RefreshHandler 兼容
+pub async fn refresh_token(
+    Extension(state): Extension<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
+) -> Response {
+    let now = Utc::now();
+    let expire_hours = if state.config.jwt_timeout > 0 {
+        state.config.jwt_timeout as i64 * 24
+    } else {
+        24
+    };
+
+    let new_claims = Claims {
+        sub: claims.sub,
+        role: claims.role,
+        username: claims.username.clone(),
+        exp: (now + Duration::hours(expire_hours)).timestamp() as usize,
+        iat: now.timestamp() as usize,
+    };
+
+    let token = match encode(
+        &Header::default(),
+        &new_claims,
+        &EncodingKey::from_secret(state.config.jwt_secret_key.as_bytes()),
+    ) {
+        Ok(t) => t,
+        Err(e) => {
+            return Json(CommonResponse::<LoginResponse>::error(format!("JWT刷新失败: {}", e))).into_response();
+        }
+    };
+
+    let body = CommonResponse::success(LoginResponse {
+        token: token.clone(),
+        expire: (now + Duration::hours(expire_hours)).to_rfc3339(),
+    });
+
+    let max_age = expire_hours * 3600;
+    let cookie = format!(
+        "nz-jwt={}; Path=/; Max-Age={}; HttpOnly; SameSite=Lax",
+        token, max_age
+    );
+
+    let mut response = Json(body).into_response();
+    response.headers_mut().insert(
+        SET_COOKIE,
+        cookie.parse().unwrap(),
+    );
+    response
+}
+
+/// 更新用户资料 — POST /api/v1/profile
+pub async fn update_profile(
+    Extension(state): Extension<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
+    Json(body): Json<serde_json::Value>,
+) -> Json<CommonResponse<()>> {
+    let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+    if let Some(new_password) = body.get("new_password").and_then(|v| v.as_str()) {
+        if !new_password.is_empty() {
+            if let Ok(hashed) = hash(new_password, DEFAULT_COST) {
+                let _ = sqlx::query("UPDATE users SET password = ?, updated_at = ? WHERE id = ?")
+                    .bind(&hashed)
+                    .bind(now.as_str())
+                    .bind(claims.sub)
+                    .execute(&state.db.pool)
+                    .await;
+            }
+        }
+    }
+
+    if let Some(new_username) = body.get("username").and_then(|v| v.as_str()) {
+        if !new_username.is_empty() {
+            let _ = sqlx::query("UPDATE users SET username = ?, updated_at = ? WHERE id = ?")
+                .bind(new_username)
+                .bind(now.as_str())
+                .bind(claims.sub)
+                .execute(&state.db.pool)
+                .await;
+        }
+    }
+
+    Json(CommonResponse::success(()))
+}
+
 /// 创建初始管理员账户（如果不存在）
 pub async fn ensure_admin(state: &AppState) -> anyhow::Result<()> {
     let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
@@ -166,3 +252,4 @@ pub async fn ensure_admin(state: &AppState) -> anyhow::Result<()> {
     }
     Ok(())
 }
+

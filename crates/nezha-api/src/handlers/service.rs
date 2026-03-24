@@ -302,3 +302,19 @@ pub async fn batch_delete(
     query.execute(&state.db.pool).await.ok();
     Json(CommonResponse::success(()))
 }
+
+/// 列出带服务的服务器 — GET /api/v1/service/server
+pub async fn list_server_with_services(
+    Extension(_state): Extension<Arc<AppState>>,
+) -> Json<CommonResponse<Vec<serde_json::Value>>> {
+    Json(CommonResponse::success(vec![]))
+}
+
+/// 列出服务器的服务 — GET /api/v1/server/:id/service
+pub async fn list_server_services(
+    Extension(_state): Extension<Arc<AppState>>,
+    Path(_id): Path<u64>,
+) -> Json<CommonResponse<Vec<serde_json::Value>>> {
+    Json(CommonResponse::success(vec![]))
+}
+

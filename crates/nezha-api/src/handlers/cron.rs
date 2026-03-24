@@ -85,3 +85,13 @@ pub async fn batch_delete(
     }
     Json(CommonResponse::success(()))
 }
+
+/// 手动触发定时任务 — GET /api/v1/cron/:id/manual
+pub async fn manual_trigger(
+    Extension(_state): Extension<Arc<AppState>>,
+    Path(_id): Path<u64>,
+) -> Json<CommonResponse<()>> {
+    // TODO: 实际触发定时任务执行
+    Json(CommonResponse::success(()))
+}
+

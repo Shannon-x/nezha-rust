@@ -19,3 +19,14 @@ pub async fn batch_delete(Extension(_state): Extension<Arc<AppState>>, Json(_ids
     Json(CommonResponse::success(()))
 }
 
+/// DDNS 供应商列表 — GET /api/v1/ddns/providers
+pub async fn list_providers(Extension(_state): Extension<Arc<AppState>>) -> Json<CommonResponse<Vec<serde_json::Value>>> {
+    // 与 Go 版 ddns.ListProviders 兼容
+    let providers = vec![
+        serde_json::json!({"name": "cloudflare", "display_name": "Cloudflare"}),
+        serde_json::json!({"name": "aliyun", "display_name": "Aliyun"}),
+        serde_json::json!({"name": "dnspod", "display_name": "DNSPod"}),
+        serde_json::json!({"name": "namesilo", "display_name": "NameSilo"}),
+    ];
+    Json(CommonResponse::success(providers))
+}

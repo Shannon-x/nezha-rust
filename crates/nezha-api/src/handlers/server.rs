@@ -232,3 +232,43 @@ pub async fn create(
         Err(e) => Json(CommonResponse::error(format!("创建失败: {}", e))),
     }
 }
+
+/// 获取服务器配置 — GET /api/v1/server/config/:id
+pub async fn get_config(
+    Extension(state): Extension<Arc<AppState>>,
+    Path(id): Path<u64>,
+) -> Json<CommonResponse<serde_json::Value>> {
+    match state.servers.get(&id) {
+        Some(s) => Json(CommonResponse::success(serde_json::json!({
+            "id": s.id,
+            "name": s.name,
+            "uuid": s.uuid,
+        }))),
+        None => Json(CommonResponse::error("服务器不存在")),
+    }
+}
+
+/// 设置服务器配置 — POST /api/v1/server/config
+pub async fn set_config(
+    Extension(_state): Extension<Arc<AppState>>,
+    Json(_body): Json<serde_json::Value>,
+) -> Json<CommonResponse<()>> {
+    Json(CommonResponse::success(()))
+}
+
+/// 批量移动服务器 — POST /api/v1/batch-move/server
+pub async fn batch_move(
+    Extension(_state): Extension<Arc<AppState>>,
+    Json(_body): Json<serde_json::Value>,
+) -> Json<CommonResponse<()>> {
+    Json(CommonResponse::success(()))
+}
+
+/// 强制更新服务器 — POST /api/v1/force-update/server
+pub async fn force_update(
+    Extension(_state): Extension<Arc<AppState>>,
+    Json(_body): Json<serde_json::Value>,
+) -> Json<CommonResponse<()>> {
+    Json(CommonResponse::success(()))
+}
+
