@@ -28,7 +28,47 @@ jobs:
         run: cargo +nightly test --workspace --test '*'
         continue-on-error: true
 
-  # ── 构建前端 + 下载 GeoIP（仅 tag 触发）──
+  # ── 自动发版（push 到 main 时自动 bump patch 版本并打 tag）──
+  auto-tag:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'chore')
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      new_tag: ${{ steps.bump.outputs.new_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest tag and bump version
+        id: bump
+        run: |
+          # 获取最新的 vX.Y.Z tag
+          LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+          if [ -z "$LATEST_TAG" ]; then
+            NEW_TAG="v1.0.0"
+          else
+            # 解析版本号并 bump patch
+            VERSION=${LATEST_TAG#v}
+            MAJOR=$(echo $VERSION | cut -d. -f1)
+            MINOR=$(echo $VERSION | cut -d. -f2)
+            PATCH=$(echo $VERSION | cut -d. -f3)
+            NEW_PATCH=$((PATCH + 1))
+            NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          fi
+          echo "Latest tag: $LATEST_TAG -> New tag: $NEW_TAG"
+          echo "new_tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.bump.outputs.new_tag }}" -m "Release ${{ steps.bump.outputs.new_tag }}"
+          git push origin "${{ steps.bump.outputs.new_tag }}"
+
+  # ── 构建前端 + 下载 GeoIP（tag 触发）──
   frontend:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -75,7 +115,7 @@ jobs:
           path: frontend-dist.tar.gz
           retention-days: 1
 
-  # ── 多平台构建（仅 tag 触发）──
+  # ── 多平台构建（tag 触发）──
   build:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [check, frontend]
