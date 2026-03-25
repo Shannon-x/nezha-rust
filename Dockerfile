@@ -9,9 +9,9 @@ WORKDIR /frontend
 RUN git clone --depth 1 https://github.com/nezhahq/admin-frontend.git admin && \
     cd admin && npm install --legacy-peer-deps && npm run build
 
-# 构建 User 前端 (nezha-dash — 需要 pnpm)
+# 构建 User 前端 (nezha-dash-v2 — Vite, 纯静态)
 RUN corepack enable && corepack prepare pnpm@latest --activate && \
-    git clone --depth 1 https://github.com/hamster1963/nezha-dash.git nezha-dash && \
+    git clone --depth 1 https://github.com/hamster1963/nezha-dash-v2.git nezha-dash && \
     cd nezha-dash && pnpm install && pnpm run build
 
 # 下载 GeoIP 数据库
@@ -43,8 +43,7 @@ RUN apt-get update && \
 
 COPY --from=builder /usr/local/bin/nezha-dashboard /usr/local/bin/nezha-dashboard
 COPY --from=frontend /frontend/admin/dist /opt/nezha/resource/admin
-COPY --from=frontend /frontend/nezha-dash/.next/standalone /opt/nezha/resource/user
-COPY --from=frontend /frontend/nezha-dash/.next/standalone /opt/nezha/resource/
+COPY --from=frontend /frontend/nezha-dash/dist/ /opt/nezha/resource/
 COPY --from=frontend /frontend/geoip.db /opt/nezha/resource/geoip.db
 
 WORKDIR /data
