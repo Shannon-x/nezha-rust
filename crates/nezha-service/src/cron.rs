@@ -120,10 +120,23 @@ impl CronManager {
                 .collect()
         };
 
-        for _sid in target_servers {
-            // TODO: 通过 gRPC 双向流下发 Task 到对应 Agent
-            // 这需要维护已连接的 Agent Task 通道
-            info!("CronManager: 向服务器下发命令: {}", command);
+        for sid in target_servers {
+            if let Some(sender) = self.state.task_senders.get(&sid) {
+                let task = nezha_proto::Task {
+                    id: 0,
+                    r#type: 0,
+                    data: command.to_string(),
+                };
+                if let Err(e) = sender.send(Ok(task)).await {
+                    warn!("CronManager: 向服务器 {} 下发任务失败: {}", sid, e);
+                    // 通道已关闭，移除
+                    self.state.task_senders.remove(&sid);
+                } else {
+                    info!("CronManager: 向服务器 {} 下发命令成功", sid);
+                }
+            } else {
+                warn!("CronManager: 服务器 {} 未连接，跳过", sid);
+            }
         }
     }
 

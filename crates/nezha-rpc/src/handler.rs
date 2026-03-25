@@ -155,6 +155,10 @@ impl NezhaService for NezhaHandler {
         let (tx, rx) = tokio::sync::mpsc::channel(128);
         let mut stream = request.into_inner();
 
+        // 保存发送端，保持通道存活
+        self.state.task_senders.insert(client_id, tx);
+        let state = self.state.clone();
+
         tokio::spawn(async move {
             while let Ok(Some(result)) = stream.message().await {
                 info!(
@@ -162,6 +166,9 @@ impl NezhaService for NezhaHandler {
                     client_id, result.r#type, result.successful
                 );
             }
+            // Agent 断连，清理通道
+            state.task_senders.remove(&client_id);
+            info!("Agent {} task stream closed, sender removed", client_id);
         });
 
         Ok(Response::new(tokio_stream::wrappers::ReceiverStream::new(

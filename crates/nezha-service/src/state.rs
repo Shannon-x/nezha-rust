@@ -4,10 +4,12 @@ use nezha_core::config::Config;
 use nezha_core::db::Database;
 use nezha_core::models::server::Server;
 use nezha_core::models::service::Service;
+use nezha_proto::Task;
 use nezha_tsdb::Store;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
+use tonic::Status;
 use chrono::Utc;
 
 /// 全局应用状态（替代 Go 的全局 singleton 变量）
@@ -29,6 +31,9 @@ pub struct AppState {
 
     /// Dashboard 启动时间
     pub boot_time: u64,
+
+    /// 已连接 Agent 的任务通道 (server_id → Task sender)
+    pub task_senders: DashMap<u64, mpsc::Sender<Result<Task, Status>>>,
 
     /// 服务监控任务通道
     pub service_dispatch_tx: mpsc::Sender<Service>,
@@ -88,6 +93,7 @@ impl AppState {
             cache,
             tsdb,
             boot_time: Utc::now().timestamp() as u64,
+            task_senders: DashMap::new(),
             service_dispatch_tx: tx,
         });
 

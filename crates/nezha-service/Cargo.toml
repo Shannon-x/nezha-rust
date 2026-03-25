@@ -25,3 +25,4 @@ parking_lot.workspace = true
 futures.workspace = true
 sqlx.workspace = true
 once_cell.workspace = true
+tonic.workspace = true
