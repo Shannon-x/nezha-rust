@@ -4,6 +4,8 @@ use anyhow::Context;
 use nezha_api::create_router;
 use nezha_core::Config;
 
+use nezha_proto::nezha_service_server::NezhaServiceServer;
+use nezha_rpc::NezhaHandler;
 use nezha_service::AppState;
 use nezha_service::sentinel::ServiceSentinel;
 use nezha_service::alert::AlertSentinel;
@@ -80,15 +82,37 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    // 创建 HTTP 路由
-    let app = create_router(state.clone());
+    // 创建 gRPC 服务（Agent 通信）
+    let grpc_handler = NezhaHandler::new(state.clone());
+    let grpc_service = NezhaServiceServer::new(grpc_handler);
+
+    // 创建 HTTP 路由（Web API + 前端）
+    let http_app = create_router(state.clone());
 
     info!("NEZHA>> Dashboard started on {}", listen_addr);
     info!("NEZHA>> API: http://{}/api/v1/", listen_addr);
+    info!("NEZHA>> gRPC: {} (same port, multiplexed)", listen_addr);
 
-    // 启动 HTTP 服务器
+    // 使用 tonic 的 multiplex 同时服务 gRPC 和 HTTP
+    // gRPC 请求 (content-type: application/grpc) 走 tonic
+    // 其他请求走 axum HTTP
     let listener = tokio::net::TcpListener::bind(listen_addr).await?;
-    axum::serve(listener, app)
+
+    // 使用 axum 的路由嵌入 tonic gRPC
+    use tower::ServiceExt;
+    let grpc_service_cloned = grpc_service.clone();
+
+    // 构建混合服务：gRPC + HTTP 在同一端口
+    let combined = axum::Router::new()
+        .merge(http_app)
+        .route_service(
+            &format!("/{}/{{method}}", <NezhaServiceServer<NezhaHandler> as tonic::server::NamedService>::NAME),
+            grpc_service_cloned,
+        )
+        .into_make_service();
+
+    // 使用 hyper 启动混合服务
+    axum::serve(listener, combined)
         .with_graceful_shutdown(shutdown_signal())
         .await?;
 

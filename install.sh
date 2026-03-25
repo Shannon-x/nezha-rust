@@ -173,7 +173,7 @@ create_default_config() {
 # Nezha Dashboard 配置文件
 language: "zh_CN"
 listen_port: 8008
-grpc_port: 5555
+# HTTP + gRPC 复用同一端口，Agent 也连接此端口
 site_name: "Nezha"
 
 database:

@@ -47,12 +47,11 @@ docker pull ghcr.io/shannon-x/nezha-rust:latest
 # 创建数据目录
 mkdir -p ./data
 
-# 运行
+# 运行（HTTP + gRPC 复用同一端口 8008）
 docker run -d \
   --name nezha \
   --restart unless-stopped \
   -p 8008:8008 \
-  -p 5555:5555 \
   -v $(pwd)/data:/data \
   ghcr.io/shannon-x/nezha-rust:latest
 ```
@@ -66,8 +65,7 @@ services:
     image: ghcr.io/shannon-x/nezha-rust:latest
     restart: unless-stopped
     ports:
-      - "8008:8008"    # HTTP API
-      - "5555:5555"    # gRPC Agent
+      - "8008:8008"    # HTTP + gRPC（Agent 也连此端口）
     volumes:
       - ./data:/data
     environment:
@@ -171,11 +169,11 @@ oauth2:
 
 ```bash
 # 克隆并构建前端
-git clone https://github.com/naiba/admin-frontend.git
-cd admin-frontend && npm install && npm run build
+git clone https://github.com/nezhahq/admin-frontend.git
+cd admin-frontend && npm install --legacy-peer-deps && npm run build
 
 # 复制构建产物到 resource 目录
-cp -r dist/ /opt/nezha/resource/
+cp -r dist/ /opt/nezha/resource/admin/
 
 # 或通过环境变量指定路径
 export NZ_RESOURCE_DIR=/path/to/frontend/dist

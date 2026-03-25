@@ -54,7 +54,8 @@ ENV TZ=Asia/Shanghai \
     NZ_DATABASE_PATH=/data/sqlite.db \
     NZ_RESOURCE_DIR=/opt/nezha/resource
 
-EXPOSE 8008 5555
+# HTTP + gRPC 复用同一端口（与 Go v1 一致）
+EXPOSE 8008
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -sf http://localhost:8008/api/v1/setting || exit 1
