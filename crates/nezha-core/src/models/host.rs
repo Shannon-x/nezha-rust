@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use nezha_utils::ip::{GeoIP, IpAddr};
 
 /// 传感器温度
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct SensorTemperature {
     pub name: String,
     pub temperature: f64,
