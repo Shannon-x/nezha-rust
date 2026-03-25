@@ -26,6 +26,7 @@ struct ServerSnapshot {
     load_1: f64,
     uptime: u64,
     country_code: String,
+    last_active: String,
 }
 
 /// WebSocket 查询参数
@@ -81,6 +82,9 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<AppState>, use_delta: bool)
                             load_1: st.map(|x| x.load_1).unwrap_or(0.0),
                             uptime: st.map(|x| x.uptime).unwrap_or(0),
                             country_code: s.geoip.as_ref().map(|g| g.country_code.clone()).unwrap_or_default(),
+                            last_active: s.last_active
+                                .map(|t| t.format("%Y-%m-%dT%H:%M:%S").to_string())
+                                .unwrap_or_default(),
                         };
                         (s.id, snap)
                     })
