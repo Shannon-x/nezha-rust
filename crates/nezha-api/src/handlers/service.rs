@@ -47,16 +47,33 @@ pub struct ServiceShowResponse {
 }
 
 #[derive(Serialize)]
-pub struct HistoryServerView {
-    pub server_id: u64,
-    pub total_up: u64,
-    pub total_down: u64,
-    pub avg_delay: f64,
+pub struct DataPoint {
+    pub ts: i64,
+    pub delay: f64,
+    pub status: u8,
 }
 
 #[derive(Serialize)]
-pub struct HistoryResponse {
-    pub servers: Vec<HistoryServerView>,
+pub struct ServiceHistorySummary {
+    pub avg_delay: f64,
+    pub up_percent: f32,
+    pub total_up: u64,
+    pub total_down: u64,
+    pub data_points: Vec<DataPoint>,
+}
+
+#[derive(Serialize)]
+pub struct ServerServiceStats {
+    pub server_id: u64,
+    pub server_name: String,
+    pub stats: ServiceHistorySummary,
+}
+
+#[derive(Serialize)]
+pub struct ServiceHistoryResponse {
+    pub service_id: u64,
+    pub service_name: String,
+    pub servers: Vec<ServerServiceStats>,
 }
 
 #[derive(Serialize)]
@@ -69,6 +86,17 @@ pub struct DailyStatsView {
 #[derive(Serialize)]
 pub struct IdResponse {
     pub id: u64,
+}
+
+#[derive(Serialize)]
+pub struct ServiceInfos {
+    pub monitor_id: u64,
+    pub server_id: u64,
+    pub monitor_name: String,
+    pub server_name: String,
+    pub display_index: i32,
+    pub created_at: Vec<i64>,
+    pub avg_delay: Vec<f64>,
 }
 
 #[derive(Deserialize)]
@@ -106,18 +134,46 @@ pub async fn show(
 pub async fn history(
     Extension(state): Extension<Arc<AppState>>,
     Path(id): Path<u64>,
-) -> Json<CommonResponse<HistoryResponse>> {
-    let empty = HistoryResponse { servers: vec![] };
+) -> Json<CommonResponse<ServiceHistoryResponse>> {
+    let mut empty = ServiceHistoryResponse {
+        service_id: id,
+        service_name: "".to_string(),
+        servers: vec![],
+    };
+    
+    // 如果有对应的服务，获取名称
+    if let Some(svc) = state.services.get(&id) {
+        empty.service_name = svc.name.clone();
+    } else {
+        return Json(CommonResponse::error("service not found"));
+    }
+
     if let Some(ref tsdb) = state.tsdb {
         match tsdb.query_service_history(id, nezha_tsdb::QueryPeriod::Day1).await {
             Ok(result) => {
-                let servers = result.servers.iter().map(|s| HistoryServerView {
-                    server_id: s.server_id,
-                    total_up: s.stats.total_up,
-                    total_down: s.stats.total_down,
-                    avg_delay: s.stats.avg_delay,
+                let servers = result.servers.iter().map(|s| {
+                    let server_name = state.servers.get(&s.server_id).map(|srv| srv.name.clone()).unwrap_or_default();
+                    ServerServiceStats {
+                        server_id: s.server_id,
+                        server_name,
+                        stats: ServiceHistorySummary {
+                            avg_delay: s.stats.avg_delay,
+                            up_percent: if s.stats.total_up + s.stats.total_down > 0 {
+                                (s.stats.total_up as f32) / ((s.stats.total_up + s.stats.total_down) as f32) * 100.0
+                            } else {
+                                0.0
+                            },
+                            total_up: s.stats.total_up,
+                            total_down: s.stats.total_down,
+                            data_points: vec![], // TSDB crate currently doesn't fetch individual data points
+                        }
+                    }
                 }).collect();
-                Json(CommonResponse::success(HistoryResponse { servers }))
+                Json(CommonResponse::success(ServiceHistoryResponse {
+                    service_id: empty.service_id,
+                    service_name: empty.service_name,
+                    servers,
+                }))
             }
             Err(_) => Json(CommonResponse::success(empty)),
         }
@@ -295,16 +351,73 @@ pub async fn batch_delete(
 
 /// 列出带服务的服务器 — GET /api/v1/service/server
 pub async fn list_server_with_services(
-    Extension(_state): Extension<Arc<AppState>>,
-) -> Json<CommonResponse<Vec<serde_json::Value>>> {
-    Json(CommonResponse::success(vec![]))
+    Extension(state): Extension<Arc<AppState>>,
+) -> Json<CommonResponse<Vec<u64>>> {
+    let mut server_ids = std::collections::HashSet::new();
+
+    for svc in state.services.iter() {
+        let s = svc.value();
+        if s.cover == 0 { // ServiceCoverAll
+            for server in state.servers.iter() {
+                if !s.skip_servers.contains_key(server.key()) {
+                    server_ids.insert(*server.key());
+                }
+            }
+        } else {
+            for (id, enabled) in &s.skip_servers {
+                if *enabled {
+                    server_ids.insert(*id);
+                }
+            }
+        }
+    }
+
+    let ret: Vec<u64> = server_ids.into_iter().collect();
+    Json(CommonResponse::success(ret))
 }
 
 /// 列出服务器的服务 — GET /api/v1/server/:id/service
 pub async fn list_server_services(
-    Extension(_state): Extension<Arc<AppState>>,
-    Path(_id): Path<u64>,
-) -> Json<CommonResponse<Vec<serde_json::Value>>> {
-    Json(CommonResponse::success(vec![]))
+    Extension(state): Extension<Arc<AppState>>,
+    Path(id): Path<u64>,
+) -> Json<CommonResponse<Vec<ServiceInfos>>> {
+    let server_name = match state.servers.get(&id) {
+        Some(s) => s.name.clone(),
+        None => return Json(CommonResponse::error("server not found")),
+    };
+
+    let mut result = Vec::new();
+
+    if let Some(ref tsdb) = state.tsdb {
+        if let Ok(history_results) = tsdb.query_service_history_by_server_id(id, nezha_tsdb::QueryPeriod::Day1).await {
+            for svc in state.services.iter() {
+                let service = svc.value();
+                
+                if service.cover == 0 {
+                    if service.skip_servers.contains_key(&id) { continue; }
+                } else {
+                    if !service.skip_servers.contains_key(&id) { continue; }
+                }
+
+                if let Some(history_result) = history_results.get(&(service.id as u64)) {
+                    if !history_result.servers.is_empty() {
+                        let server_stats = &history_result.servers[0];
+                        
+                        result.push(ServiceInfos {
+                            monitor_id: service.id as u64,
+                            server_id: id,
+                            monitor_name: service.name.clone(),
+                            server_name: server_name.clone(),
+                            display_index: service.display_index,
+                            created_at: vec![], // Empty array to satisfy frontend shape
+                            avg_delay: vec![],
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    Json(CommonResponse::success(result))
 }
 
