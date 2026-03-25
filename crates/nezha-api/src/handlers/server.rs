@@ -239,7 +239,7 @@ pub async fn get_config(
         Some(_s) => {
             // 一键安装命令，指向 Shannon-x/agent-rust
             let cmd = format!(
-                "curl -L https://raw.githubusercontent.com/Shannon-x/agent-rust/main/install.sh -o agent-install.sh && chmod +x agent-install.sh && sudo ./agent-install.sh -s {} -p {}{}",
+                "curl -L https://raw.githubusercontent.com/Shannon-x/agent-rust/main/install.sh -o agent-install.sh && chmod +x agent-install.sh && sudo ./agent-install.sh -s {} -k {}{}",
                 install_host, agent_secret, tls_flag
             );
             Json(CommonResponse::success(cmd))

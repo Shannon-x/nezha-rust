@@ -1531,6 +1531,7 @@ dependencies = [
  "nezha-utils",
  "parking_lot",
  "prost",
+ "sqlx",
  "thiserror",
  "tokio",
  "tokio-stream",
