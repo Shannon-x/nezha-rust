@@ -21,6 +21,7 @@ pub async fn get_config(
             "custom_code": config.custom_code,
             "custom_code_dashboard": config.custom_code_dashboard,
             "install_host": config.install_host,
+            "agent_secret_key": config.agent_secret_key,
             "tls": config.tls,
             "web_real_ip_header": config.web_real_ip_header,
             "agent_real_ip_header": config.agent_real_ip_header,

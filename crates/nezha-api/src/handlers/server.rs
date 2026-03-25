@@ -45,8 +45,7 @@ pub struct ServerView {
     pub state: Option<HostState>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub geoip: Option<nezha_utils::ip::GeoIP>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_active: Option<NaiveDateTime>,
+    pub last_active: String,
     pub online: bool,
 }
 
@@ -91,7 +90,9 @@ pub async fn list(
                 host: s.host.clone(),
                 state: s.state.clone(),
                 geoip: s.geoip.clone(),
-                last_active: s.last_active,
+                last_active: s.last_active
+                    .map(|t| t.format("%Y-%m-%dT%H:%M:%S").to_string())
+                    .unwrap_or_default(),
                 online,
             }
         })
