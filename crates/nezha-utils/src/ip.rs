@@ -4,9 +4,9 @@ use std::fmt;
 /// IP 地址对（IPv4 + IPv6）
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IpAddr {
-    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
     pub ipv4_addr: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
     pub ipv6_addr: String,
 }
 
@@ -37,6 +37,6 @@ impl fmt::Display for IpAddr {
 pub struct GeoIP {
     #[serde(default)]
     pub ip: IpAddr,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
     pub country_code: String,
 }

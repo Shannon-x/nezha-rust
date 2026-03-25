@@ -9,71 +9,68 @@ pub struct SensorTemperature {
 }
 
 /// 主机状态（运行时数据，不入库）
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct HostState {
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    #[serde(default)]
     pub cpu: f64,
-    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    #[serde(default)]
     pub mem_used: u64,
-    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    #[serde(default)]
     pub swap_used: u64,
-    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    #[serde(default)]
     pub disk_used: u64,
-    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    #[serde(default)]
     pub net_in_transfer: u64,
-    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    #[serde(default)]
     pub net_out_transfer: u64,
-    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    #[serde(default)]
     pub net_in_speed: u64,
-    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    #[serde(default)]
     pub net_out_speed: u64,
-    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    #[serde(default)]
     pub uptime: u64,
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    #[serde(default)]
     pub load_1: f64,
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    #[serde(default)]
     pub load_5: f64,
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    #[serde(default)]
     pub load_15: f64,
-    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    #[serde(default)]
     pub tcp_conn_count: u64,
-    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    #[serde(default)]
     pub udp_conn_count: u64,
-    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    #[serde(default)]
     pub process_count: u64,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub temperatures: Vec<SensorTemperature>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub gpu: Vec<f64>,
 }
-
-fn is_zero_f64(v: &f64) -> bool { *v == 0.0 }
-fn is_zero_u64(v: &u64) -> bool { *v == 0 }
 
 /// 主机信息（运行时数据，不入库）
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Host {
-    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
     pub platform: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
     pub platform_version: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub cpu: Vec<String>,
-    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    #[serde(default)]
     pub mem_total: u64,
-    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    #[serde(default)]
     pub disk_total: u64,
-    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    #[serde(default)]
     pub swap_total: u64,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
     pub arch: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
     pub virtualization: String,
-    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    #[serde(default)]
     pub boot_time: u64,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
     pub version: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub gpu: Vec<String>,
 }
 

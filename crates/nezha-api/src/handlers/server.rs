@@ -39,12 +39,9 @@ pub struct ServerView {
     pub display_index: i32,
     pub hide_for_guest: bool,
     pub enable_ddns: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub host: Option<Host>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub state: Option<HostState>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub geoip: Option<nezha_utils::ip::GeoIP>,
+    pub host: Host,
+    pub state: HostState,
+    pub geoip: nezha_utils::ip::GeoIP,
     pub last_active: String,
     pub online: bool,
 }
@@ -87,9 +84,9 @@ pub async fn list(
                 display_index: s.display_index,
                 hide_for_guest: s.hide_for_guest,
                 enable_ddns: s.enable_ddns,
-                host: s.host.clone(),
-                state: s.state.clone(),
-                geoip: s.geoip.clone(),
+                host: s.host.clone().unwrap_or_default(),
+                state: s.state.clone().unwrap_or_default(),
+                geoip: s.geoip.clone().unwrap_or_default(),
                 last_active: s.last_active
                     .map(|t| t.format("%Y-%m-%dT%H:%M:%S").to_string())
                     .unwrap_or_default(),
