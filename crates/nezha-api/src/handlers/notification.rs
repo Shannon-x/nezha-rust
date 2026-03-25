@@ -9,7 +9,7 @@ pub async fn list(
     Extension(state): Extension<Arc<AppState>>,
 ) -> Json<CommonResponse<Vec<serde_json::Value>>> {
     let rows: Vec<(i64, String, String, String, i32)> = sqlx::query_as(
-        "SELECT id, name, tag, url, verify_tls FROM notifications ORDER BY id DESC"
+        "SELECT id, name, tag, url, CAST(verify_tls AS INTEGER) FROM notifications ORDER BY id DESC"
     )
     .fetch_all(&state.db.pool).await.unwrap_or_default();
 

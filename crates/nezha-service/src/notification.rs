@@ -67,7 +67,7 @@ pub async fn send_notification(
     // 批量查询所有通知配置（单次 DB 查询）
     let placeholders: String = notification_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
     let query = format!(
-        "SELECT id, tag, url, request_method, request_type, COALESCE(request_header,''), COALESCE(request_body,''), verify_tls FROM notifications WHERE id IN ({})",
+        "SELECT id, tag, url, request_method, request_type, COALESCE(request_header,''), COALESCE(request_body,''), CAST(verify_tls AS INTEGER) FROM notifications WHERE id IN ({})",
         placeholders
     );
 

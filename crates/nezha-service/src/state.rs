@@ -106,7 +106,7 @@ impl AppState {
     /// 从数据库加载所有服务器
     async fn load_servers(&self) -> anyhow::Result<()> {
         let rows: Vec<(i64, String, String, String, String, i32, i32, i32)> = sqlx::query_as(
-            "SELECT id, name, COALESCE(uuid,''), COALESCE(note,''), COALESCE(public_note,''), display_index, hide_for_guest, enable_ddns FROM servers"
+            "SELECT id, name, COALESCE(uuid,''), COALESCE(note,''), COALESCE(public_note,''), display_index, CAST(hide_for_guest AS INTEGER), CAST(enable_ddns AS INTEGER) FROM servers"
         )
         .fetch_all(&self.db.pool).await?;
 

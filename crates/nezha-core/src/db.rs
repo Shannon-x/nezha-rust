@@ -76,8 +76,8 @@ impl Database {
                 note TEXT DEFAULT '',
                 public_note TEXT DEFAULT '',
                 display_index INTEGER DEFAULT 0,
-                hide_for_guest BOOLEAN DEFAULT FALSE,
-                enable_ddns BOOLEAN DEFAULT FALSE,
+                hide_for_guest INTEGER DEFAULT 0,
+                enable_ddns INTEGER DEFAULT 0,
                 ddns_profiles_raw TEXT DEFAULT '[]',
                 override_ddns_domains_raw TEXT DEFAULT '{}'
             )"#,
@@ -106,8 +106,8 @@ impl Database {
                 request_type INTEGER DEFAULT 1,
                 request_header TEXT DEFAULT '',
                 request_body TEXT DEFAULT '',
-                verify_tls BOOLEAN DEFAULT TRUE,
-                skip_check BOOLEAN DEFAULT FALSE
+                verify_tls INTEGER DEFAULT 1,
+                skip_check INTEGER DEFAULT 0
             )"#,
             // notification_groups 表
             r#"CREATE TABLE IF NOT EXISTS notification_groups (
@@ -133,7 +133,7 @@ impl Database {
                 recover_trigger_tasks_raw TEXT DEFAULT '[]',
                 notification_group_id INTEGER DEFAULT 0,
                 trigger_mode INTEGER DEFAULT 0,
-                enable BOOLEAN DEFAULT TRUE
+                enable INTEGER DEFAULT 1
             )"#,
             // services 表
             r#"CREATE TABLE IF NOT EXISTS services (
@@ -146,15 +146,15 @@ impl Database {
                 duration INTEGER DEFAULT 30,
                 notification_group_id INTEGER DEFAULT 0,
                 cover INTEGER DEFAULT 0,
-                notify BOOLEAN DEFAULT FALSE,
+                notify INTEGER DEFAULT 0,
                 skip_servers_raw TEXT DEFAULT '{}',
                 fail_trigger_tasks_raw TEXT DEFAULT '[]',
                 recover_trigger_tasks_raw TEXT DEFAULT '[]',
                 min_latency REAL DEFAULT 0,
                 max_latency REAL DEFAULT 0,
-                latency_notify BOOLEAN DEFAULT FALSE,
-                enable_trigger_task BOOLEAN DEFAULT FALSE,
-                enable_show_in_service BOOLEAN DEFAULT FALSE,
+                latency_notify INTEGER DEFAULT 0,
+                enable_trigger_task INTEGER DEFAULT 0,
+                enable_show_in_service INTEGER DEFAULT 0,
                 display_index INTEGER DEFAULT 0
             )"#,
             // service_histories 表
@@ -179,10 +179,10 @@ impl Database {
                 command TEXT DEFAULT '',
                 servers_raw TEXT DEFAULT '[]',
                 cover INTEGER DEFAULT 0,
-                push_successful BOOLEAN DEFAULT FALSE,
+                push_successful INTEGER DEFAULT 0,
                 notification_group_id INTEGER DEFAULT 0,
                 last_executed_at DATETIME,
-                last_result BOOLEAN DEFAULT FALSE
+                last_result INTEGER DEFAULT 0
             )"#,
             // transfers 表
             r#"CREATE TABLE IF NOT EXISTS transfers (
@@ -201,7 +201,7 @@ impl Database {
                 server_id INTEGER DEFAULT 0,
                 host TEXT DEFAULT '',
                 domain TEXT DEFAULT '',
-                enabled BOOLEAN DEFAULT TRUE
+                enabled INTEGER DEFAULT 1
             )"#,
             // ddns_profiles 表
             r#"CREATE TABLE IF NOT EXISTS ddns_profiles (
@@ -219,8 +219,8 @@ impl Database {
                 webhook_headers TEXT DEFAULT '',
                 domains_raw TEXT DEFAULT '[]',
                 max_retries INTEGER DEFAULT 3,
-                enable_ipv4 BOOLEAN DEFAULT TRUE,
-                enable_ipv6 BOOLEAN DEFAULT FALSE
+                enable_ipv4 INTEGER DEFAULT 1,
+                enable_ipv6 INTEGER DEFAULT 0
             )"#,
             // wafs 表
             r#"CREATE TABLE IF NOT EXISTS wafs (

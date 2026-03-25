@@ -98,7 +98,7 @@ jobs:
           git clone --depth 1 https://github.com/nezhahq/admin-frontend.git
           cd admin-frontend
           npm install --legacy-peer-deps
-          npm run build
+          GENERATE_SOURCEMAP=false npm run build
 
       - name: Build User Frontend (nezha-dash)
         run: |
@@ -106,6 +106,10 @@ jobs:
           cd nezha-dash
           corepack enable
           corepack prepare pnpm@latest --activate
+          # 使用静态导出模式（不需要 Node.js 运行时）
+          echo '/** @type {import("next").NextConfig} */
+          const nextConfig = { output: "export", images: { unoptimized: true } };
+          module.exports = nextConfig;' > next.config.js
           pnpm install
           pnpm run build
 
@@ -121,11 +125,12 @@ jobs:
       - name: Package frontend + geoip
         run: |
           mkdir -p resource
-          # nezha-dash uses Next.js standalone output
-          cp -r nezha-dash/.next/standalone/* resource/ 2>/dev/null || true
-          cp -r nezha-dash/.next/standalone resource/user 2>/dev/null || true
+          # 使用静态导出结果（纯 HTML/CSS/JS，无 Node.js 运行时）
+          cp -r nezha-dash/out/* resource/ 2>/dev/null || true
           cp -r admin-frontend/dist resource/admin 2>/dev/null || true
           cp geoip.db resource/geoip.db
+          echo "Frontend resource size:"
+          du -sh resource/
           tar czf frontend-dist.tar.gz resource/
 
       - uses: actions/upload-artifact@v4
