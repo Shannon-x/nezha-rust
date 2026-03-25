@@ -8,13 +8,13 @@ use std::sync::Arc;
 pub async fn list(
     Extension(state): Extension<Arc<AppState>>,
 ) -> Json<CommonResponse<Vec<serde_json::Value>>> {
-    let rows: Vec<(i64, String, String, String, bool)> = sqlx::query_as(
+    let rows: Vec<(i64, String, String, String, i32)> = sqlx::query_as(
         "SELECT id, name, tag, url, verify_tls FROM notifications ORDER BY id DESC"
     )
     .fetch_all(&state.db.pool).await.unwrap_or_default();
 
     let data: Vec<serde_json::Value> = rows.iter().map(|(id, name, tag, url, verify)| {
-        serde_json::json!({"id": id, "name": name, "tag": tag, "url": url, "verify_tls": verify})
+        serde_json::json!({"id": id, "name": name, "tag": tag, "url": url, "verify_tls": *verify != 0})
     }).collect();
     Json(CommonResponse::success(data))
 }
@@ -39,7 +39,7 @@ pub async fn create(
     )
     .bind(now.as_str()).bind(now.as_str()).bind(name).bind(tag).bind(url)
     .bind(request_method).bind(request_type).bind(&request_header).bind(request_body)
-    .bind(verify)
+    .bind(verify as i32)
     .execute(&state.db.pool).await;
 
     match result {

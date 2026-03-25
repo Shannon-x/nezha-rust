@@ -71,19 +71,20 @@ pub async fn send_notification(
         placeholders
     );
 
-    let mut q = sqlx::query_as::<_, (i64, String, String, i32, i32, String, String, bool)>(&query);
+    let mut q = sqlx::query_as::<_, (i64, String, String, i32, i32, String, String, i32)>(&query);
     for id in &notification_ids {
         q = q.bind(id);
     }
 
-    let configs: Vec<(i64, String, String, i32, i32, String, String, bool)> = 
+    let configs: Vec<(i64, String, String, i32, i32, String, String, i32)> = 
         q.fetch_all(&state.db.pool).await.unwrap_or_default();
 
     // 并发发送所有通知
     let title = title.to_string();
     let message = message.to_string();
 
-    for (_id, tag, url, method, _req_type, headers_str, body_tpl, verify_tls) in configs {
+    for (_id, tag, url, method, _req_type, headers_str, body_tpl, verify_tls_i) in configs {
+        let verify_tls = verify_tls_i != 0;
         let title = title.clone();
         let message = message.clone();
         let sem = NOTIFY_SEMAPHORE.clone();

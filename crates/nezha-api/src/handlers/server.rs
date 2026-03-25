@@ -156,7 +156,7 @@ pub async fn update(
     let mut query = sqlx::query(&sql);
     for v in &str_vals { query = query.bind(v.as_str()); }
     if let Some(di) = form.display_index { query = query.bind(di); }
-    if let Some(hfg) = form.hide_for_guest { query = query.bind(hfg); }
+    if let Some(hfg) = form.hide_for_guest { query = query.bind(hfg as i32); }
     query = query.bind(id as i64);
     query.execute(&state.db.pool).await.ok();
 
@@ -203,7 +203,7 @@ pub async fn create(
     )
     .bind(now.as_str()).bind(now.as_str()).bind(&name).bind(&uuid_str)
     .bind(form.note.as_deref().unwrap_or("")).bind(form.display_index.unwrap_or(0))
-    .bind(form.hide_for_guest.unwrap_or(false)).bind(form.enable_ddns.unwrap_or(false))
+    .bind(form.hide_for_guest.unwrap_or(false) as i32).bind(form.enable_ddns.unwrap_or(false) as i32)
     .execute(&state.db.pool).await;
 
     match result {

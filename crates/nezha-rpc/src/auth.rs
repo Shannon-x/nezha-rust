@@ -59,8 +59,8 @@ async fn auto_register_server(state: &Arc<AppState>, uuid: &str) -> Result<u64, 
     .bind(uuid)
     .bind("")
     .bind(0i32)
-    .bind(false)
-    .bind(false)
+    .bind(0i32)
+    .bind(0i32)
     .execute(&state.db.pool)
     .await
     .map_err(|e| {

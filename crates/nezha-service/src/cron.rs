@@ -29,7 +29,7 @@ impl CronManager {
 
     /// 每分钟 tick，检查需要执行的任务
     async fn tick(&self) {
-        let rows: Vec<(i64, String, i32, String, String, String, i32, i64, bool)> = sqlx::query_as(
+        let rows: Vec<(i64, String, i32, String, String, String, i32, i64, i32)> = sqlx::query_as(
             "SELECT id, name, task_type, scheduler, command, COALESCE(servers,'[]'), cover, notification_group_id, push_successful FROM crons"
         )
         .fetch_all(&self.state.db.pool).await.unwrap_or_default();

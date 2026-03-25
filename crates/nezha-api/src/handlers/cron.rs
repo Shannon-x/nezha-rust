@@ -8,7 +8,7 @@ use std::sync::Arc;
 pub async fn list(
     Extension(state): Extension<Arc<AppState>>,
 ) -> Json<CommonResponse<Vec<serde_json::Value>>> {
-    let rows: Vec<(i64, String, i32, String, String, String, String, i32, i64, bool)> = sqlx::query_as(
+    let rows: Vec<(i64, String, i32, String, String, String, String, i32, i64, i32)> = sqlx::query_as(
         "SELECT id, name, task_type, scheduler, command, COALESCE(servers,'[]'), COALESCE(push_successful_message,''), cover, notification_group_id, push_successful FROM crons ORDER BY id DESC"
     )
     .fetch_all(&state.db.pool).await.unwrap_or_default();
