@@ -106,10 +106,6 @@ jobs:
           cd nezha-dash
           corepack enable
           corepack prepare pnpm@latest --activate
-          # 使用静态导出模式（不需要 Node.js 运行时）
-          echo '/** @type {import("next").NextConfig} */
-          const nextConfig = { output: "export", images: { unoptimized: true } };
-          module.exports = nextConfig;' > next.config.js
           pnpm install
           pnpm run build
 
@@ -124,13 +120,26 @@ jobs:
 
       - name: Package frontend + geoip
         run: |
-          mkdir -p resource
-          # 使用静态导出结果（纯 HTML/CSS/JS，无 Node.js 运行时）
-          cp -r nezha-dash/out/* resource/ 2>/dev/null || true
+          mkdir -p resource/_next
+
+          # User Frontend: 只拷贝静态资源（跳过 node_modules + server.js）
+          # .next/static → JS/CSS chunks
+          cp -r nezha-dash/.next/static resource/_next/static 2>/dev/null || true
+          # public → 图片、字体等
+          cp -r nezha-dash/public/* resource/ 2>/dev/null || true
+          # 预渲染的 HTML 页面
+          find nezha-dash/.next/server/app -name '*.html' -exec cp {} resource/ \; 2>/dev/null || true
+
+          # Admin Frontend: Vite 产物（纯静态）
           cp -r admin-frontend/dist resource/admin 2>/dev/null || true
+
+          # GeoIP 数据库
           cp geoip.db resource/geoip.db
-          echo "Frontend resource size:"
+
+          echo "=== Frontend resource size ==="
           du -sh resource/
+          find resource -type f | wc -l
+          echo "files"
           tar czf frontend-dist.tar.gz resource/
 
       - uses: actions/upload-artifact@v4
