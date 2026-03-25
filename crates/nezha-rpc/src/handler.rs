@@ -184,12 +184,48 @@ impl NezhaService for NezhaHandler {
         request: Request<Streaming<IoStreamData>>,
     ) -> Result<Response<Self::IOStreamStream>, Status> {
         let _client_id = crate::auth::check_auth(request.metadata(), &self.state).await?;
+        let mut stream = request.into_inner();
+
+        let first_msg = match stream.message().await {
+            Ok(Some(msg)) => msg,
+            _ => return Err(Status::invalid_argument("Failed to read first IOStream data")),
+        };
+
+        if first_msg.data.len() < 4 || first_msg.data[0..4] != [0xff, 0x05, 0xff, 0x05] {
+            return Err(Status::invalid_argument("Invalid stream magic bytes"));
+        }
+
+        let stream_id = String::from_utf8_lossy(&first_msg.data[4..]).to_string();
+
+        let active_stream = match self.state.active_streams.remove(&stream_id) {
+            Some(s) => s.1,
+            None => return Err(Status::not_found("StreamID not found or already bound")),
+        };
+
         let (tx, rx) = tokio::sync::mpsc::channel(128);
 
-        // TODO: 实现完整的 IO 流隧道
-        Ok(Response::new(tokio_stream::wrappers::ReceiverStream::new(
-            rx,
-        )))
+        let mut rx_from_ws = active_stream.rx_from_ws;
+        tokio::spawn(async move {
+            while let Some(data) = rx_from_ws.recv().await {
+                if tx.send(Ok(IoStreamData { data })).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        let tx_to_ws = active_stream.tx_to_ws;
+        tokio::spawn(async move {
+            while let Ok(Some(msg)) = stream.message().await {
+                if msg.data.is_empty() {
+                    continue; // 忽略 keep-alive 心跳包
+                }
+                if tx_to_ws.send(msg.data).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        Ok(Response::new(tokio_stream::wrappers::ReceiverStream::new(rx)))
     }
 
     async fn report_geo_ip(
@@ -219,6 +255,19 @@ impl NezhaService for NezhaHandler {
         if let Some(mut server) = self.state.servers.get_mut(&client_id) {
             let mut geo = geoip;
             geo.country_code = country_code.clone();
+
+            // 检查并更新DDNS
+            if server.enable_ddns {
+                let ip_changed = server.geoip.as_ref().map(|g| &g.ip) != Some(&geo.ip);
+                if ip_changed {
+                    nezha_service::ddns::DdnsManager::update(
+                        self.state.clone(),
+                        &server.clone(),
+                        &geo
+                    ).await;
+                }
+            }
+
             server.geoip = Some(geo);
         }
 

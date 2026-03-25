@@ -62,6 +62,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/service/{id}", patch(handlers::service::update))
         .route("/api/v1/batch-delete/service", post(handlers::service::batch_delete))
 
+        // Web Terminal & File Management
+        .route("/api/v1/ws/terminal/{id}", get(crate::ws::terminal_stream))
+        .route("/api/v1/ws/file/{id}", get(crate::ws::fm_stream))
+
         // 服务器组
         .route("/api/v1/server-group", post(handlers::server_group::create))
         .route("/api/v1/server-group/{id}", patch(handlers::server_group::update))

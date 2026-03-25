@@ -31,3 +31,4 @@ bcrypt.workspace = true
 sqlx.workspace = true
 reqwest.workspace = true
 urlencoding.workspace = true
+futures-util = "0.3.32"

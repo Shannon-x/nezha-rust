@@ -12,6 +12,11 @@ use tokio::sync::{mpsc, RwLock};
 use tonic::Status;
 use chrono::Utc;
 
+pub struct ActiveStream {
+    pub tx_to_ws: mpsc::Sender<Vec<u8>>,
+    pub rx_from_ws: mpsc::Receiver<Vec<u8>>,
+}
+
 /// 全局应用状态（替代 Go 的全局 singleton 变量）
 pub struct AppState {
     /// 配置（RwLock 支持运行时修改 + 持久化）
@@ -37,6 +42,9 @@ pub struct AppState {
 
     /// 服务监控任务通道
     pub service_dispatch_tx: mpsc::Sender<Service>,
+
+    /// 活跃的 Web Terminal / FM 流代理
+    pub active_streams: DashMap<String, ActiveStream>,
 }
 
 impl AppState {
@@ -95,6 +103,7 @@ impl AppState {
             boot_time: Utc::now().timestamp() as u64,
             task_senders: DashMap::new(),
             service_dispatch_tx: tx,
+            active_streams: DashMap::new(),
         });
 
         // 从数据库加载服务器列表

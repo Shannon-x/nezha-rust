@@ -1440,6 +1440,7 @@ dependencies = [
  "chrono",
  "dashmap",
  "futures",
+ "futures-util",
  "jsonwebtoken",
  "nezha-core",
  "nezha-proto",

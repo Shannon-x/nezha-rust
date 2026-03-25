@@ -5,15 +5,16 @@
 /// - online:  在线用户数
 /// - servers: StreamServer 数组
 use axum::{
-    extract::{ws::{Message, WebSocket}, Extension, Query, WebSocketUpgrade},
+    extract::{ws::{Message, WebSocket}, Extension, Path, Query, WebSocketUpgrade},
     response::IntoResponse,
 };
 use chrono::Utc;
 use nezha_core::models::host::{Host, HostState};
-use nezha_service::AppState;
+use nezha_service::state::{AppState, ActiveStream};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::time::Duration;
+use futures_util::{StreamExt, SinkExt};
 
 /// WebSocket 查询参数
 #[derive(Deserialize)]
@@ -52,6 +53,69 @@ pub async fn server_stream(
     Query(_params): Query<WsParams>,
 ) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_ws(socket, state))
+}
+
+pub async fn terminal_stream(
+    Extension(state): Extension<Arc<AppState>>,
+    Path(id): Path<u64>,
+    ws: WebSocketUpgrade,
+) -> axum::response::Response {
+    ws.on_upgrade(move |socket| handle_proxy_stream(socket, state, id, 8)) // 8 = TASK_TYPE_TERMINAL_GRPC
+}
+
+pub async fn fm_stream(
+    Extension(state): Extension<Arc<AppState>>,
+    Path(id): Path<u64>,
+    ws: WebSocketUpgrade,
+) -> axum::response::Response {
+    ws.on_upgrade(move |socket| handle_proxy_stream(socket, state, id, 11)) // 11 = TASK_TYPE_FM
+}
+
+async fn handle_proxy_stream(socket: WebSocket, state: Arc<AppState>, server_id: u64, task_type: u64) {
+    let stream_id = uuid::Uuid::new_v4().to_string();
+    let (tx_to_ws, mut rx_to_ws) = tokio::sync::mpsc::channel::<Vec<u8>>(128);
+    let (tx_from_ws, rx_from_ws) = tokio::sync::mpsc::channel::<Vec<u8>>(128);
+
+    state.active_streams.insert(stream_id.clone(), ActiveStream {
+        tx_to_ws,
+        rx_from_ws,
+    });
+
+    let data = serde_json::json!({ "StreamID": stream_id }).to_string();
+
+    if let Some(sender) = state.task_senders.get(&server_id) {
+        let task = nezha_proto::Task { id: 0, r#type: task_type, data };
+        if sender.send(Ok(task)).await.is_err() {
+            return;
+        }
+    } else {
+        return;
+    }
+
+    let (mut ws_sender, mut ws_receiver) = socket.split();
+
+    let mut ws_recv_task = tokio::spawn(async move {
+        while let Some(Ok(msg)) = ws_receiver.next().await {
+            match msg {
+                Message::Binary(b) => { if tx_from_ws.send(b.to_vec()).await.is_err() { break; } }
+                Message::Text(t) => { if tx_from_ws.send(t.as_str().as_bytes().to_vec()).await.is_err() { break; } }
+                Message::Close(_) => break,
+                _ => {}
+            }
+        }
+    });
+
+    let mut ws_send_task = tokio::spawn(async move {
+        while let Some(data) = rx_to_ws.recv().await {
+            if ws_sender.send(Message::Binary(data.into())).await.is_err() { break; }
+        }
+    });
+
+    tokio::select! {
+        _ = (&mut ws_recv_task) => ws_send_task.abort(),
+        _ = (&mut ws_send_task) => ws_recv_task.abort(),
+    }
+    state.active_streams.remove(&stream_id);
 }
 
 /// 从 AppState 构建 StreamServerData（与 Go 版 getServerStat 完全一致）
