@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use nezha_core::models::server::Server;
-use nezha_core::models::ddns::DdnsProfile;
-use nezha_core::models::host::GeoIP;
+use nezha_utils::ip::GeoIP;
 use reqwest::{Client, Method, header::{HeaderName, HeaderValue}};
 use tracing::{info, warn, error};
 use std::time::Duration;
