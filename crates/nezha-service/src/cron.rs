@@ -36,7 +36,7 @@ impl CronManager {
 
         let now = Utc::now();
 
-        for (id, name, task_type, scheduler, command, servers_str, cover, ng_id, push_ok) in &rows {
+        for (id, name, task_type, scheduler, command, servers_str, cover, _ng_id, _push_ok) in &rows {
             // 简化的 cron 调度匹配（完整实现需要 cron 表达式解析）
             if !self.should_run(&scheduler, &now) {
                 continue;

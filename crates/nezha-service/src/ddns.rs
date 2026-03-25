@@ -30,6 +30,8 @@ impl DdnsManager {
         if profiles_ids.is_empty() {
             return;
         }
+
+        let override_domains = server.override_ddns_domains.clone();
         
         tokio::spawn(async move {
             let client = Client::builder()
@@ -43,7 +45,7 @@ impl DdnsManager {
                 let row: Result<(i64, String, String, String, String, String, String, i32, String, String, String, i32, bool, bool), _> = 
                     sqlx::query_as(q).bind(profile_id as i64).fetch_one(&state.db.pool).await;
 
-                let (id, name, provider, access_id, access_secret, w_url, w_method, w_type, w_body, w_headers, doms_json, max_retries, e_v4, e_v6) = match row {
+                let (id, name, provider, _access_id, access_secret, w_url, w_method, w_type, w_body, w_headers, doms_json, max_retries, e_v4, e_v6) = match row {
                     Ok(r) => r,
                     Err(e) => {
                         error!("DdnsManager: Failed to fetch profile {}: {}", profile_id, e);
@@ -54,7 +56,7 @@ impl DdnsManager {
                 let domains: Vec<String> = serde_json::from_str(&doms_json).unwrap_or_default();
                 
                 // 获取需要覆盖的域名配置
-                let active_domains = if let Some(override_doms) = server.override_ddns_domains.get(&(id as u64)) {
+                let active_domains = if let Some(override_doms) = override_domains.get(&(id as u64)) {
                     if !override_doms.is_empty() {
                         override_doms.clone()
                     } else {
