@@ -98,11 +98,15 @@ async fn main() -> anyhow::Result<()> {
     // 其他请求走 axum HTTP
     let listener = tokio::net::TcpListener::bind(listen_addr).await?;
 
-    // 使用 axum 的路由嵌入 tonic gRPC
-    use tower::ServiceExt;
+    // 使用 hyper 原生 HTTP/2 accept loop，配置 keep-alive 与 Agent 保持一致
+    // Agent 设置了 http2_keep_alive_interval=30s，服务端必须响应 PING 否则 Agent 会断线
+    use hyper::server::conn::http2;
+    use hyper_util::rt::{TokioExecutor, TokioIo};
+    use std::time::Duration;
+    use tower::{Service, ServiceExt};
+
     let grpc_service_cloned = grpc_service.clone();
 
-    // 构建混合服务：gRPC + HTTP 在同一端口
     let combined = axum::Router::new()
         .merge(http_app)
         .route_service(
@@ -111,10 +115,42 @@ async fn main() -> anyhow::Result<()> {
         )
         .into_make_service();
 
-    // 使用 hyper 启动混合服务
-    axum::serve(listener, combined)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    let mut make_svc = combined;
+
+    info!("NEZHA>> Listening on {} (HTTP/2 keep-alive enabled)", listen_addr);
+
+    let shutdown_fut = shutdown_signal();
+    tokio::pin!(shutdown_fut);
+
+    loop {
+        tokio::select! {
+            _ = &mut shutdown_fut => { break; }
+            accept = listener.accept() => {
+                let (stream, _addr) = match accept {
+                    Ok(v) => v,
+                    Err(e) => {
+                        tracing::warn!("Accept error: {}", e);
+                        continue;
+                    }
+                };
+
+                let svc = make_svc.call(&stream).await
+                    .expect("make_service failed");
+
+                tokio::spawn(async move {
+                    let io = TokioIo::new(stream);
+                    let conn = http2::Builder::new(TokioExecutor::new())
+                        .keep_alive_interval(Some(Duration::from_secs(30)))
+                        .keep_alive_timeout(Duration::from_secs(15))
+                        .serve_connection(io, svc);
+                    if let Err(e) = conn.await {
+                        tracing::debug!("Connection closed: {}", e);
+                    }
+                });
+            }
+        }
+    }
+
 
     // 优雅关闭
     info!("NEZHA>> Graceful shutdown...");
