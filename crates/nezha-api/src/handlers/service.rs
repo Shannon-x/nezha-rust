@@ -268,11 +268,11 @@ pub async fn create(
     let enable_trigger_task = form.enable_trigger_task.unwrap_or(false);
     let now = Utc::now().naive_utc().format("%Y-%m-%d %H:%M:%S").to_string();
 
-    let skip_servers_str = serde_json::to_string(&form.skip_servers.as_ref().unwrap_or(&std::collections::HashMap::new())).unwrap_or_else(|_| "{}".to_string());
+    let _skip_servers_str = serde_json::to_string(&form.skip_servers.as_ref().unwrap_or(&std::collections::HashMap::new())).unwrap_or_else(|_| "{}".to_string());
     
     // SQLite doesn't natively support arrays, we need to serialize them
-    let fail_str = serde_json::to_string(&form.fail_trigger_tasks.as_ref().unwrap_or(&vec![])).unwrap_or_else(|_| "[]".to_string());
-    let recover_str = serde_json::to_string(&form.recover_trigger_tasks.as_ref().unwrap_or(&vec![])).unwrap_or_else(|_| "[]".to_string());
+    let _fail_str = serde_json::to_string(&form.fail_trigger_tasks.as_ref().unwrap_or(&vec![])).unwrap_or_else(|_| "[]".to_string());
+    let _recover_str = serde_json::to_string(&form.recover_trigger_tasks.as_ref().unwrap_or(&vec![])).unwrap_or_else(|_| "[]".to_string());
 
     let result = sqlx::query(
         "INSERT INTO services (created_at, updated_at, name, type, target, duration, notify, cover, notification_group_id, enable_show_in_service, display_index) VALUES (?,?,?,?,?,?,?,?,?,?,?)"
@@ -337,10 +337,10 @@ pub async fn update(
     let has_show = form.enable_show_in_service.is_some();
     let has_di = form.display_index.is_some();
     // Add additional fields dynamically
-    let has_min_latency = form.min_latency.is_some();
-    let has_max_latency = form.max_latency.is_some();
-    let has_latency_notify = form.latency_notify.is_some();
-    let has_enable_trigger = form.enable_trigger_task.is_some();
+    let _has_min_latency = form.min_latency.is_some();
+    let _has_max_latency = form.max_latency.is_some();
+    let _has_latency_notify = form.latency_notify.is_some();
+    let _has_enable_trigger = form.enable_trigger_task.is_some();
 
     if has_type { parts.push("type = ?"); }
     if has_dur { parts.push("duration = ?"); }
@@ -442,11 +442,11 @@ pub async fn list_server_services(
     };
 
     let mut result = Vec::new();
-    let mut history_map = std::collections::HashMap::new();
+    let mut _history_map = std::collections::HashMap::new();
 
     if let Some(ref tsdb) = state.tsdb {
         if let Ok(history_results) = tsdb.query_service_history_by_server_id(id, nezha_tsdb::QueryPeriod::Day1).await {
-            history_map = history_results;
+            _history_map = history_results;
         }
     }
 
