@@ -101,7 +101,7 @@ async fn main() -> anyhow::Result<()> {
     // 使用 hyper 原生 HTTP/2 accept loop，配置 keep-alive 与 Agent 保持一致
     // Agent 设置了 http2_keep_alive_interval=30s，服务端必须响应 PING 否则 Agent 会断线
     use hyper_util::server::conn::auto;
-    use hyper_util::rt::{TokioExecutor, TokioIo};
+    use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
     use std::time::Duration;
     use tower::Service;
 
@@ -141,6 +141,7 @@ async fn main() -> anyhow::Result<()> {
                     let io = TokioIo::new(stream);
                     let hyper_svc = hyper_util::service::TowerToHyperService::new(svc);
                     let mut builder = auto::Builder::new(TokioExecutor::new());
+                    builder.http2().timer(TokioTimer::new());
                     builder.http2().keep_alive_interval(Duration::from_secs(30));
                     builder.http2().keep_alive_timeout(Duration::from_secs(15));
                     
