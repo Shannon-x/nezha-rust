@@ -1,11 +1,11 @@
 use crate::store::*;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
-use parking_lot::RwLock;
+
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tracing::{info, warn};
+use tracing::info;
 
 /// SQLite WAL TSDB 后端
 pub struct SqliteStore {

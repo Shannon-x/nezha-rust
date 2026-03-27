@@ -4,7 +4,7 @@ use chrono::NaiveDateTime;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tracing::{info, warn};
+use tracing::info;
 
 // ────────────────────────────────────────────
 // PostgreSQL TSDB 后端

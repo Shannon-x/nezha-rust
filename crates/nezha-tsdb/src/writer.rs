@@ -1,7 +1,7 @@
 use crate::store::{ServerMetrics, ServiceMetrics, Store};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{info, warn};
+use tracing::warn;
 
 /// 缓冲写入器 - 批量写入提高性能
 pub struct BufferedWriter {

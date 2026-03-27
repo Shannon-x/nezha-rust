@@ -1,4 +1,4 @@
-use axum::{extract::Extension, extract::Path, extract::Query, Json};
+use axum::{extract::Extension, extract::Path, Json};
 use chrono::Utc;
 use nezha_core::models::common::CommonResponse;
 use nezha_service::AppState;

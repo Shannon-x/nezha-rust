@@ -103,7 +103,7 @@ async fn main() -> anyhow::Result<()> {
     use hyper::server::conn::http2;
     use hyper_util::rt::{TokioExecutor, TokioIo};
     use std::time::Duration;
-    use tower::{Service, ServiceExt};
+    use tower::ServiceExt;
 
     let grpc_service_cloned = grpc_service.clone();
 
@@ -139,10 +139,11 @@ async fn main() -> anyhow::Result<()> {
 
                 tokio::spawn(async move {
                     let io = TokioIo::new(stream);
+                    let hyper_svc = hyper_util::service::TowerToHyperService::new(svc);
                     let conn = http2::Builder::new(TokioExecutor::new())
                         .keep_alive_interval(Some(Duration::from_secs(30)))
                         .keep_alive_timeout(Duration::from_secs(15))
-                        .serve_connection(io, svc);
+                        .serve_connection(io, hyper_svc);
                     if let Err(e) = conn.await {
                         tracing::debug!("Connection closed: {}", e);
                     }

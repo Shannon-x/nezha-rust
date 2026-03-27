@@ -7,9 +7,9 @@ use chrono::{Duration, Utc};
 use jsonwebtoken::{encode, EncodingKey, Header};
 use nezha_core::models::common::CommonResponse;
 use nezha_service::AppState;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
-use tracing::{info, error};
+use tracing::info;
 
 use super::auth::Claims;
 

@@ -4,7 +4,7 @@ use chrono::NaiveDateTime;
 use sqlx::mysql::{MySqlPool, MySqlPoolOptions};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tracing::{info, warn};
+use tracing::info;
 
 /// MySQL TSDB 后端
 pub struct MysqlStore {

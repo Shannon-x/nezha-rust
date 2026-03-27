@@ -5,7 +5,7 @@ use nezha_tsdb::{ServiceMetrics, Store};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
-use tracing::{info, warn, debug};
+use tracing::{info, debug};
 
 // ────────────────────────────────────────────
 // 高性能 ServiceSentinel

@@ -3,7 +3,7 @@ use nezha_proto::*;
 use nezha_service::AppState;
 use std::sync::Arc;
 use tonic::{Request, Response, Status, Streaming};
-use tracing::{info, warn};
+use tracing::info;
 
 /// gRPC 请求处理器
 pub struct NezhaHandler {

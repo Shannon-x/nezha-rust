@@ -3,7 +3,7 @@ use chrono::Utc;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use parking_lot::RwLock;
+
 use tracing::{info, warn, debug};
 
 // ────────────────────────────────────────────
@@ -67,7 +67,7 @@ pub struct AlertSentinel {
     /// 编译后的规则缓存
     rules_cache: Vec<CompiledRule>,
     /// 规则版本号（检测数据库变化用）
-    rules_version: i64,
+    _rules_version: i64,
     /// 最小告警间隔（秒）
     min_interval: i64,
 }
@@ -78,7 +78,7 @@ impl AlertSentinel {
             state,
             dedup: HashMap::with_capacity(256),
             rules_cache: Vec::new(),
-            rules_version: 0,
+            _rules_version: 0,
             min_interval: 300,
         }
     }
