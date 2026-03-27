@@ -223,7 +223,7 @@ pub async fn create(
 pub async fn get_config(
     Extension(state): Extension<Arc<AppState>>,
     Path(id): Path<u64>,
-) -> Json<CommonResponse<String>> {
+) -> axum::response::Response {
     let cfg = state.config.read().await;
     let agent_secret = &cfg.agent_secret_key;
     let install_host = if cfg.install_host.is_empty() {
@@ -240,9 +240,14 @@ pub async fn get_config(
                 "curl -L https://raw.githubusercontent.com/Shannon-x/agent-rust/main/install.sh -o agent-install.sh && chmod +x agent-install.sh && sudo ./agent-install.sh -s {} -k {}{}",
                 install_host, agent_secret, tls_flag
             );
-            Json(CommonResponse::success(cmd))
+            cmd.into_response()
         }
-        None => Json(CommonResponse::error("服务器不存在")),
+        None => {
+            axum::response::Response::builder()
+                .status(404)
+                .body("server not found".into())
+                .unwrap()
+        }
     }
 }
 
