@@ -103,7 +103,7 @@ async fn main() -> anyhow::Result<()> {
     use hyper::server::conn::http2;
     use hyper_util::rt::{TokioExecutor, TokioIo};
     use std::time::Duration;
-    use tower::ServiceExt;
+    use tower::Service;
 
     let grpc_service_cloned = grpc_service.clone();
 
