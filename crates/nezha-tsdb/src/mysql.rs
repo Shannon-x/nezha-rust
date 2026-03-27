@@ -183,6 +183,23 @@ impl Store for MysqlStore {
         Ok(result)
     }
 
+    async fn query_service_datapoints(&self, service_id: u64, server_id: u64, period: QueryPeriod) -> anyhow::Result<Vec<(i64, f64)>> {
+        let hours = match period {
+            QueryPeriod::Hour1 => 1, QueryPeriod::Hour6 => 6, QueryPeriod::Day1 => 24,
+            QueryPeriod::Week1 => 168, QueryPeriod::Month1 => 720,
+        };
+        let cutoff = chrono::Utc::now().naive_utc() - chrono::Duration::hours(hours);
+
+        let rows: Vec<(NaiveDateTime, f64)> = sqlx::query_as(
+            "SELECT timestamp, delay FROM tsdb_service_metrics WHERE service_id = ? AND server_id = ? AND timestamp > ? AND successful = 1 ORDER BY timestamp"
+        )
+        .bind(service_id as i64).bind(server_id as i64).bind(cutoff)
+        .fetch_all(&self.pool).await?;
+
+        Ok(rows.into_iter().map(|(ts, delay)| (ts.and_utc().timestamp_millis(), delay)).collect())
+    }
+
+
     async fn maintenance(&self) {
         let cutoff = chrono::Utc::now().naive_utc() - chrono::Duration::days(self.retention_days as i64);
         // 分批删除，每次最多 10000 行，避免 InnoDB row-lock 风暴

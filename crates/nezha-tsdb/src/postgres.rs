@@ -191,6 +191,20 @@ impl Store for PostgresStore {
         Ok(result)
     }
 
+    async fn query_service_datapoints(&self, service_id: u64, server_id: u64, period: QueryPeriod) -> anyhow::Result<Vec<(i64, f64)>> {
+        let hours = period_hours(period);
+        let cutoff = chrono::Utc::now().naive_utc() - chrono::Duration::hours(hours);
+
+        let rows: Vec<(NaiveDateTime, f64)> = sqlx::query_as(
+            "SELECT ts, delay FROM tsdb_service_metrics WHERE service_id = $1 AND server_id = $2 AND ts > $3 AND successful = TRUE ORDER BY ts"
+        )
+        .bind(service_id as i64).bind(server_id as i64).bind(cutoff)
+        .fetch_all(&self.pool).await?;
+
+        Ok(rows.into_iter().map(|(ts, delay)| (ts.and_utc().timestamp_millis(), delay)).collect())
+    }
+
+
     async fn maintenance(&self) {
         let cutoff = chrono::Utc::now().naive_utc() - chrono::Duration::days(self.retention_days as i64);
         // PostgreSQL: 分批删除避免长事务（每次最多 10000 行）

@@ -39,6 +39,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/service/{id}/history", get(handlers::service::get_history))
         .route("/api/v1/server/{id}/service", get(handlers::service::list_server_services))
         .route("/api/v1/server/{id}/metrics", get(handlers::server::get_metrics))
+        .route("/api/v1/monitor/{id}", get(handlers::service::monitor_history))
+
         .layer(middleware::from_fn_with_state(
             state.clone(),
             |ext: Extension<Arc<AppState>>, req, next| crate::middleware::auth_optional(ext, req, next),

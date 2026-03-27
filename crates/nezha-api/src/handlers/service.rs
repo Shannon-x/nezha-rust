@@ -217,6 +217,81 @@ pub async fn get_history(
     }
 }
 
+/// 服务监控时序数据 — GET /api/v1/monitor/:id
+/// 前端调用此接口获取 created_at（时间戳数组）和 avg_delay（延迟数组）
+/// 每个元素代表一台被该监控覆盖的服务器的延迟时序记录
+pub async fn monitor_history(
+    Extension(state): Extension<Arc<AppState>>,
+    Path(id): Path<u64>,
+) -> Json<CommonResponse<Vec<ServiceInfos>>> {
+    // 检查服务是否存在
+    if state.services.get(&id).is_none() {
+        return Json(CommonResponse::error("service not found"));
+    }
+
+    let mut result = Vec::new();
+
+    // 收集所有被此服务覆盖的服务器
+    let covered_servers: Vec<(u64, String)> = {
+        let svc = state.services.get(&id).unwrap();
+        state.servers.iter()
+            .filter(|entry| {
+                let sid = *entry.key();
+                if svc.cover == 0 {
+                    !svc.skip_servers.contains_key(&sid)
+                } else {
+                    svc.skip_servers.get(&sid).copied().unwrap_or(false)
+                }
+            })
+            .map(|entry| (*entry.key(), entry.value().name.clone()))
+            .collect()
+    };
+
+    let service_name = state.services.get(&id).map(|s| s.name.clone()).unwrap_or_default();
+    let display_index = state.services.get(&id).map(|s| s.display_index).unwrap_or(0);
+
+    if let Some(ref tsdb) = state.tsdb {
+        for (server_id, server_name) in covered_servers {
+            match tsdb.query_service_datapoints(id, server_id, nezha_tsdb::QueryPeriod::Day1).await {
+                Ok(points) => {
+                    let created_at: Vec<i64> = points.iter().map(|(ts, _)| *ts).collect();
+                    let avg_delay: Vec<f64> = points.iter().map(|(_, d)| *d).collect();
+                    result.push(ServiceInfos {
+                        monitor_id: id,
+                        server_id,
+                        monitor_name: service_name.clone(),
+                        server_name,
+                        display_index,
+                        created_at,
+                        avg_delay,
+                    });
+                }
+                Err(_) => {
+                    // 新服务还没有数据，推送空数组以避免前端 undefined 错误
+                    result.push(ServiceInfos {
+                        monitor_id: id, server_id,
+                        monitor_name: service_name.clone(), server_name,
+                        display_index,
+                        created_at: vec![], avg_delay: vec![],
+                    });
+                }
+            }
+        }
+    } else {
+        // 没有 TSDB 时按覆盖到的服务器返回空数组
+        for (server_id, server_name) in covered_servers {
+            result.push(ServiceInfos {
+                monitor_id: id, server_id,
+                monitor_name: service_name.clone(), server_name,
+                display_index, created_at: vec![], avg_delay: vec![],
+            });
+        }
+    }
+
+    Json(CommonResponse::success(result))
+}
+
+
 /// 管理列表 — 返回数组（与 Go 版 listHandler 兼容）
 pub async fn list(
     Extension(state): Extension<Arc<AppState>>,

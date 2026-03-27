@@ -131,6 +131,15 @@ pub trait Store: Send + Sync {
         period: QueryPeriod,
     ) -> anyhow::Result<std::collections::HashMap<u64, ServiceHistoryResult>>;
 
+    /// 查询服务对特定服务器的时序延迟数据（用于 /api/v1/monitor/:id）
+    async fn query_service_datapoints(
+        &self,
+        service_id: u64,
+        server_id: u64,
+        period: QueryPeriod,
+    ) -> anyhow::Result<Vec<(i64, f64)>>;
+
+
     /// 维护（清理过期数据等）
     async fn maintenance(&self);
     /// 刷盘
