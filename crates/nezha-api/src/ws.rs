@@ -57,31 +57,38 @@ pub async fn server_stream(
 
 pub async fn terminal_stream(
     Extension(state): Extension<Arc<AppState>>,
-    Path(id): Path<u64>,
+    Path(session_id): Path<String>,
     ws: WebSocketUpgrade,
 ) -> axum::response::Response {
-    ws.on_upgrade(move |socket| handle_proxy_stream(socket, state, id, 8)) // 8 = TASK_TYPE_TERMINAL_GRPC
+    ws.on_upgrade(move |socket| handle_terminal_ws(socket, state, session_id, 8)) // 8 = TASK_TYPE_TERMINAL_GRPC
 }
 
 pub async fn fm_stream(
     Extension(state): Extension<Arc<AppState>>,
-    Path(id): Path<u64>,
+    Path(session_id): Path<String>,
     ws: WebSocketUpgrade,
 ) -> axum::response::Response {
-    ws.on_upgrade(move |socket| handle_proxy_stream(socket, state, id, 11)) // 11 = TASK_TYPE_FM
+    ws.on_upgrade(move |socket| handle_terminal_ws(socket, state, session_id, 11)) // 11 = TASK_TYPE_FM
 }
 
-async fn handle_proxy_stream(socket: WebSocket, state: Arc<AppState>, server_id: u64, task_type: u64) {
-    let stream_id = uuid::Uuid::new_v4().to_string();
+/// 两步式终端/FM WebSocket 代理
+async fn handle_terminal_ws(socket: WebSocket, state: Arc<AppState>, stream_id: String, task_type: u64) {
+    let server_id = match state.pending_terminals.remove(&stream_id) {
+        Some((_key, server_id)) => server_id,
+        None => return, // session not found
+    };
+
+    // 创建 stream 和发 task 的逻辑（与原来的 handle_proxy_stream 一致）
+    let real_stream_id = uuid::Uuid::new_v4().to_string();
     let (tx_to_ws, mut rx_to_ws) = tokio::sync::mpsc::channel::<Vec<u8>>(128);
     let (tx_from_ws, rx_from_ws) = tokio::sync::mpsc::channel::<Vec<u8>>(128);
 
-    state.active_streams.insert(stream_id.clone(), ActiveStream {
+    state.active_streams.insert(real_stream_id.clone(), ActiveStream {
         tx_to_ws,
         rx_from_ws,
     });
 
-    let data = serde_json::json!({ "StreamID": stream_id }).to_string();
+    let data = serde_json::json!({ "StreamID": real_stream_id }).to_string();
 
     if let Some(sender) = state.task_senders.get(&server_id) {
         let task = nezha_proto::Task { id: 0, r#type: task_type, data };
@@ -115,7 +122,7 @@ async fn handle_proxy_stream(socket: WebSocket, state: Arc<AppState>, server_id:
         _ = (&mut ws_recv_task) => ws_send_task.abort(),
         _ = (&mut ws_send_task) => ws_recv_task.abort(),
     }
-    state.active_streams.remove(&stream_id);
+    state.active_streams.remove(&real_stream_id);
 }
 
 /// 从 AppState 构建 StreamServerData（与 Go 版 getServerStat 完全一致）

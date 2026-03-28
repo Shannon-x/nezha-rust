@@ -10,3 +10,4 @@ pub mod nat;
 pub mod user;
 pub mod setting;
 pub mod oauth2;
+pub mod terminal;

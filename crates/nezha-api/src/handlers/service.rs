@@ -49,8 +49,21 @@ pub struct ServiceListView {
 }
 
 #[derive(Serialize)]
+pub struct CycleTransferStats {
+    pub name: String,
+    pub from: chrono::NaiveDateTime,
+    pub to: chrono::NaiveDateTime,
+    pub max: u64,
+    pub min: u64,
+    pub server_name: std::collections::HashMap<u64, String>,
+    pub transfer: std::collections::HashMap<u64, u64>,
+    pub next_update: std::collections::HashMap<u64, chrono::NaiveDateTime>,
+}
+
+#[derive(Serialize)]
 pub struct ServiceShowResponse {
-    pub services: Vec<ServicePublicView>,
+    pub services: std::collections::HashMap<Box<str>, nezha_core::models::service::ServiceResponseItem>,
+    pub cycle_transfer_stats: std::collections::HashMap<Box<str>, CycleTransferStats>,
 }
 
 #[derive(Serialize)]
@@ -126,22 +139,36 @@ pub struct ServiceForm {
     pub enable_trigger_task: Option<bool>,
 }
 
-/// 服务监控公开列表（零 json! 分配）
+/// 服务监控公开列表（完全匹配 Go 原版返回格式）
 pub async fn show(
     Extension(state): Extension<Arc<AppState>>,
 ) -> Json<CommonResponse<ServiceShowResponse>> {
-    let services: Vec<ServicePublicView> = state.services
-        .iter()
-        .filter(|e| e.value().enable_show_in_service)
-        .map(|e| {
-            let s = e.value();
-            ServicePublicView {
-                id: s.id, name: s.name.clone(), r#type: s.r#type,
-                target: s.target.clone(), duration: s.duration,
-            }
-        })
-        .collect();
-    Json(CommonResponse::success(ServiceShowResponse { services }))
+    let mut services = std::collections::HashMap::new();
+    let cycle_transfer_stats = std::collections::HashMap::new(); // 当前未实现周期流量统计，留空
+    
+    for e in state.services.iter() {
+        let s = e.value();
+        if !s.enable_show_in_service {
+            continue;
+        }
+        
+        // 构造默认的全 0 统计信息
+        // 实际的 up/down 状态需要结合 Background 检测结果更新，这里先返回结构
+        let item = nezha_core::models::service::ServiceResponseItem {
+            service_name: s.name.clone(),
+            current_up: if s.current_up { 1 } else { 0 },
+            current_down: if s.current_down { 1 } else { 0 },
+            total_up: 0,
+            total_down: 0,
+            delay: Box::new([0.0; 30]),
+            up: Box::new([0; 30]),
+            down: Box::new([0; 30]),
+        };
+        // 注意前端 JS 中对 ID 作为 key 解析要求是 string（虽然也可以是数值，序列化为 "1"）
+        services.insert(s.id.to_string().into_boxed_str(), item);
+    }
+    
+    Json(CommonResponse::success(ServiceShowResponse { services, cycle_transfer_stats }))
 }
 
 /// 服务历史（零 json!）
@@ -511,34 +538,53 @@ pub async fn list_server_services(
         None => return Json(CommonResponse::error("server not found")),
     };
 
-    let mut result = Vec::new();
-    let mut _history_map = std::collections::HashMap::new();
+    let mut services_to_query = Vec::new();
 
-    if let Some(ref tsdb) = state.tsdb {
-        if let Ok(history_results) = tsdb.query_service_history_by_server_id(id, nezha_tsdb::QueryPeriod::Day1).await {
-            _history_map = history_results;
+    // 先收集该服务器包含的所有服务，然后释放锁
+    for e in state.services.iter() {
+        let svc = e.value();
+        if svc.cover == 0 {
+            if svc.skip_servers.contains_key(&id) { continue; }
+        } else {
+            if !svc.skip_servers.contains_key(&id) { continue; }
         }
+        services_to_query.push((svc.id as u64, svc.name.clone(), svc.display_index));
     }
 
-    for svc in state.services.iter() {
-        let service = svc.value();
-        
-        if service.cover == 0 {
-            if service.skip_servers.contains_key(&id) { continue; }
-        } else {
-            if !service.skip_servers.contains_key(&id) { continue; }
-        }
+    let mut result = Vec::with_capacity(services_to_query.len());
 
-        // Add service irrespective of history being present to prevent UI undefined failures on empty array
-        result.push(ServiceInfos {
-            monitor_id: service.id as u64,
-            server_id: id,
-            monitor_name: service.name.clone(),
-            server_name: server_name.clone(),
-            display_index: service.display_index,
-            created_at: vec![], // Empty array if no history is present yet
-            avg_delay: vec![],
-        });
+    if let Some(ref tsdb) = state.tsdb {
+        for (service_id, monitor_name, display_index) in services_to_query {
+            let points = tsdb.query_service_datapoints(service_id, id, nezha_tsdb::QueryPeriod::Day1)
+                .await
+                .unwrap_or_default();
+            
+            let created_at: Vec<i64> = points.iter().map(|(ts, _)| *ts).collect();
+            let avg_delay: Vec<f64> = points.iter().map(|(_, d)| *d).collect();
+
+            result.push(ServiceInfos {
+                monitor_id: service_id,
+                server_id: id,
+                monitor_name,
+                server_name: server_name.clone(),
+                display_index,
+                created_at,
+                avg_delay,
+            });
+        }
+    } else {
+        // 没有 TSDB 返回空数组记录
+        for (service_id, monitor_name, display_index) in services_to_query {
+            result.push(ServiceInfos {
+                monitor_id: service_id,
+                server_id: id,
+                monitor_name,
+                server_name: server_name.clone(),
+                display_index,
+                created_at: vec![],
+                avg_delay: vec![],
+            });
+        }
     }
 
     Json(CommonResponse::success(result))

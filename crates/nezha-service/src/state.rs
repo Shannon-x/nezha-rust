@@ -45,6 +45,10 @@ pub struct AppState {
 
     /// 活跃的 Web Terminal / FM 流代理
     pub active_streams: DashMap<String, ActiveStream>,
+
+    /// 挂起的终端会话（session_id → server_id）
+    /// POST /api/v1/terminal 创建，GET /api/v1/ws/terminal/{id} 消费
+    pub pending_terminals: DashMap<String, u64>,
 }
 
 impl AppState {
@@ -104,6 +108,7 @@ impl AppState {
             task_senders: DashMap::new(),
             service_dispatch_tx: tx,
             active_streams: DashMap::new(),
+            pending_terminals: DashMap::new(),
         });
 
         // 从数据库加载服务器列表
