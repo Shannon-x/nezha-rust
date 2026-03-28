@@ -240,24 +240,38 @@ impl ServiceSentinel {
 
     /// 加载服务列表
     async fn load_services(state: &Arc<AppState>) {
-        let rows: Vec<(i64, String, i32, String, i32, bool, i32, bool, i32, i64)> = sqlx::query_as(
-            "SELECT id, name, type, target, duration, notify, cover, enable_show_in_service, display_index, notification_group_id FROM services"
+        let rows: Vec<(
+            i64, String, i32, String, i32, bool, i32, bool, i32, i64,
+            String, String, String, f64, f64, bool, bool
+        )> = sqlx::query_as(
+            "SELECT id, name, type, target, duration, notify, cover, enable_show_in_service, display_index, notification_group_id, COALESCE(skip_servers_raw,'{}'), COALESCE(fail_trigger_tasks_raw,'[]'), COALESCE(recover_trigger_tasks_raw,'[]'), min_latency, max_latency, latency_notify, enable_trigger_task FROM services"
         )
         .fetch_all(&state.db.pool).await.unwrap_or_default();
 
-        for (id, name, stype, target, duration, notify, cover, show, di, ng_id) in rows {
-            let mut svc = Service::default();
-            svc.id = id;
-            svc.name = name;
-            svc.r#type = stype;
-            svc.target = target;
-            svc.duration = if duration < 5 { 30 } else { duration }; // 最小 5 秒
-            svc.notify = notify;
-            svc.cover = cover;
-            svc.enable_show_in_service = show;
-            svc.display_index = di;
-            svc.notification_group_id = ng_id as u64;
-            state.services.insert(id as u64, svc);
+        for row in rows {
+            let skip_servers: std::collections::HashMap<u64, bool> = serde_json::from_str(&row.10).unwrap_or_default();
+            let fail_trigger_tasks: Vec<u64> = serde_json::from_str(&row.11).unwrap_or_default();
+            let recover_trigger_tasks: Vec<u64> = serde_json::from_str(&row.12).unwrap_or_default();
+
+            state.services.insert(row.0 as u64, Service {
+                id: row.0,
+                name: row.1,
+                r#type: row.2,
+                target: row.3,
+                duration: if row.4 < 5 { 30 } else { row.4 },
+                notify: row.5,
+                cover: row.6,
+                enable_show_in_service: row.7,
+                display_index: row.8,
+                notification_group_id: row.9 as u64,
+                skip_servers,
+                fail_trigger_tasks,
+                recover_trigger_tasks,
+                min_latency: row.13 as f32,
+                max_latency: row.14 as f32,
+                latency_notify: row.15,
+                enable_trigger_task: row.16,
+            });
         }
         info!("ServiceSentinel: 加载 {} 个监控服务", state.services.len());
     }

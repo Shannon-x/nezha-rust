@@ -337,11 +337,12 @@ pub async fn create(
     let _recover_str = serde_json::to_string(&form.recover_trigger_tasks.as_ref().unwrap_or(&vec![])).unwrap_or_else(|_| "[]".to_string());
 
     let result = sqlx::query(
-        "INSERT INTO services (created_at, updated_at, name, type, target, duration, notify, cover, notification_group_id, enable_show_in_service, display_index) VALUES (?,?,?,?,?,?,?,?,?,?,?)"
+        "INSERT INTO services (created_at, updated_at, name, type, target, duration, notify, cover, notification_group_id, enable_show_in_service, display_index, skip_servers_raw, fail_trigger_tasks_raw, recover_trigger_tasks_raw, min_latency, max_latency, latency_notify, enable_trigger_task) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
     )
     .bind(now.as_str()).bind(now.as_str()).bind(name).bind(stype).bind(target)
     .bind(duration).bind(notify).bind(cover).bind(ng_id).bind(show_in).bind(di)
-    // Add additional DB schema fields if your SQLite schema supports them, currently falling back to just returning them in memory since original didn't insert them
+    .bind(_skip_servers_str.as_str()).bind(_fail_str.as_str()).bind(_recover_str.as_str())
+    .bind(min_latency).bind(max_latency).bind(latency_notify).bind(enable_trigger_task)
     .execute(&state.db.pool).await;
 
     match result {
@@ -398,11 +399,10 @@ pub async fn update(
     let has_ng = form.notification_group_id.is_some();
     let has_show = form.enable_show_in_service.is_some();
     let has_di = form.display_index.is_some();
-    // Add additional fields dynamically
-    let _has_min_latency = form.min_latency.is_some();
-    let _has_max_latency = form.max_latency.is_some();
-    let _has_latency_notify = form.latency_notify.is_some();
-    let _has_enable_trigger = form.enable_trigger_task.is_some();
+    let has_min_latency = form.min_latency.is_some();
+    let has_max_latency = form.max_latency.is_some();
+    let has_latency_notify = form.latency_notify.is_some();
+    let has_enable_trigger = form.enable_trigger_task.is_some();
 
     if has_type { parts.push("type = ?"); }
     if has_dur { parts.push("duration = ?"); }
@@ -411,9 +411,13 @@ pub async fn update(
     if has_ng { parts.push("notification_group_id = ?"); }
     if has_show { parts.push("enable_show_in_service = ?"); }
     if has_di { parts.push("display_index = ?"); }
-    
-    // Some columns might not exist in the basic DB schema, but we want to bind them safely.
-    // For now we just update DB for the available fields, but memory for all.
+    if has_min_latency { parts.push("min_latency = ?"); }
+    if has_max_latency { parts.push("max_latency = ?"); }
+    if has_latency_notify { parts.push("latency_notify = ?"); }
+    if has_enable_trigger { parts.push("enable_trigger_task = ?"); }
+    if let Some(ref ss) = form.skip_servers { parts.push("skip_servers_raw = ?"); str_vals.push(serde_json::to_string(ss).unwrap_or_else(|_| "{}".to_string())); }
+    if let Some(ref ft) = form.fail_trigger_tasks { parts.push("fail_trigger_tasks_raw = ?"); str_vals.push(serde_json::to_string(ft).unwrap_or_else(|_| "[]".to_string())); }
+    if let Some(ref rt) = form.recover_trigger_tasks { parts.push("recover_trigger_tasks_raw = ?"); str_vals.push(serde_json::to_string(rt).unwrap_or_else(|_| "[]".to_string())); }
 
     let sql = format!("UPDATE services SET {} WHERE id = ?", parts.join(", "));
     let mut query = sqlx::query(&sql);
@@ -425,6 +429,10 @@ pub async fn update(
     if let Some(ng) = form.notification_group_id { query = query.bind(ng); }
     if let Some(s) = form.enable_show_in_service { query = query.bind(s); }
     if let Some(di) = form.display_index { query = query.bind(di); }
+    if let Some(ml) = form.min_latency { query = query.bind(ml); }
+    if let Some(ml) = form.max_latency { query = query.bind(ml); }
+    if let Some(ln) = form.latency_notify { query = query.bind(ln); }
+    if let Some(et) = form.enable_trigger_task { query = query.bind(et); }
     query = query.bind(id as i64);
     query.execute(&state.db.pool).await.ok();
 
