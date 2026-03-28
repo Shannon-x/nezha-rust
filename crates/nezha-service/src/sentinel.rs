@@ -240,11 +240,12 @@ impl ServiceSentinel {
 
     /// 加载服务列表
     async fn load_services(state: &Arc<AppState>) {
+        // sqlx 的 FromRow 仅支持最多 16 元素的元组，因此查询列数限制为 16
         let rows: Vec<(
             i64, String, i32, String, i32, bool, i32, bool, i32, i64,
-            String, String, String, f64, f64, bool, bool
+            String, String, String, f64, f64, bool
         )> = sqlx::query_as(
-            "SELECT id, name, type, target, duration, notify, cover, enable_show_in_service, display_index, notification_group_id, COALESCE(skip_servers_raw,'{}'), COALESCE(fail_trigger_tasks_raw,'[]'), COALESCE(recover_trigger_tasks_raw,'[]'), min_latency, max_latency, latency_notify, enable_trigger_task FROM services"
+            "SELECT id, name, type, target, duration, notify, cover, enable_show_in_service, display_index, notification_group_id, COALESCE(skip_servers_raw,'{}'), COALESCE(fail_trigger_tasks_raw,'[]'), COALESCE(recover_trigger_tasks_raw,'[]'), min_latency, max_latency, latency_notify FROM services"
         )
         .fetch_all(&state.db.pool).await.unwrap_or_default();
 
@@ -270,7 +271,7 @@ impl ServiceSentinel {
                 min_latency: row.13 as f32,
                 max_latency: row.14 as f32,
                 latency_notify: row.15,
-                enable_trigger_task: row.16,
+                ..Service::default()
             });
         }
         info!("ServiceSentinel: 加载 {} 个监控服务", state.services.len());

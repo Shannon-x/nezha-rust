@@ -114,7 +114,8 @@ impl Database {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 created_at DATETIME,
                 updated_at DATETIME,
-                name VARCHAR(255) NOT NULL
+                name VARCHAR(255) NOT NULL,
+                notifications TEXT DEFAULT '[]'
             )"#,
             // notification_group_notifications 表
             r#"CREATE TABLE IF NOT EXISTS notification_group_notifications (
@@ -132,8 +133,8 @@ impl Database {
                 fail_trigger_tasks_raw TEXT DEFAULT '[]',
                 recover_trigger_tasks_raw TEXT DEFAULT '[]',
                 notification_group_id INTEGER DEFAULT 0,
-                trigger_mode INTEGER DEFAULT 0,
-                enable INTEGER DEFAULT 1
+                trigger_mode TEXT DEFAULT 'any',
+                enabled INTEGER DEFAULT 1
             )"#,
             // services 表
             r#"CREATE TABLE IF NOT EXISTS services (
@@ -180,6 +181,7 @@ impl Database {
                 servers_raw TEXT DEFAULT '[]',
                 cover INTEGER DEFAULT 0,
                 push_successful INTEGER DEFAULT 0,
+                push_successful_message TEXT DEFAULT '',
                 notification_group_id INTEGER DEFAULT 0,
                 last_executed_at DATETIME,
                 last_result INTEGER DEFAULT 0
